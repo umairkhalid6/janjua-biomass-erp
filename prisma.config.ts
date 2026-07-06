@@ -8,10 +8,13 @@
 // crash config resolution (a thrown import here leaves datasource.url unset,
 // which fails `prisma migrate deploy`).
 import { defineConfig } from "prisma/config";
+import { createRequire } from "node:module";
 
 if (!process.env["DATABASE_URL"]) {
   try {
-    await import("dotenv/config");
+    // Synchronous, best-effort load (no top-level await, which some config
+    // loaders handle inconsistently). Only needed for local .env files.
+    createRequire(import.meta.url)("dotenv/config");
   } catch {
     // dotenv unavailable — rely on the platform-injected environment.
   }
