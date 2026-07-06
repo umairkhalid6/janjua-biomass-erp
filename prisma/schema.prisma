@@ -1,0 +1,176 @@
+// Janjua Biomass ERP — data model
+// Money is PKR stored as Decimal(14,2). Production and sales are measured in
+// 40-kg bags (BAG_KG = 40, see src/lib/constants.ts); purchases are in KG.
+// Report aggregations live in SQL views (see prisma/migrations/*_views).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+}
+
+enum MaterialType {
+  POPLAR
+  HARDWOOD
+  HAIDERI_PLYWOOD
+  WOOD_CHIPS
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(OPERATOR)
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  sales        PelletSale[]
+
+  @@map("users")
+}
+
+model Customer {
+  id        String       @id @default(cuid())
+  name      String
+  company   String?
+  phone     String?
+  createdAt DateTime     @default(now())
+  sales     PelletSale[]
+
+  @@map("customers")
+}
+
+model Vendor {
+  id        String             @id @default(cuid())
+  name      String
+  phone     String?
+  notes     String?
+  createdAt DateTime           @default(now())
+  purchases MaterialPurchase[]
+  payments  VendorPayment[]
+
+  @@map("vendors")
+}
+
+// Collapses the 4 identical purchase sheets (Poplar / Hard Wood / Haideri
+// Plywood sawdust + Chipper for Crusher) into one table keyed by materialType.
+model MaterialPurchase {
+  id           String       @id @default(cuid())
+  date         DateTime     @db.Date
+  materialType MaterialType
+  vendorId     String
+  vendor       Vendor       @relation(fields: [vendorId], references: [id])
+  weightKg     Decimal      @db.Decimal(12, 2)
+  materialCost Decimal      @db.Decimal(14, 2)
+  handlingCost Decimal      @default(0) @db.Decimal(14, 2) // unloading / gari expense
+  notes        String?
+  createdAt    DateTime     @default(now())
+
+  @@index([date])
+  @@index([materialType, date])
+  @@map("material_purchases")
+}
+
+model VendorPayment {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  amount    Decimal  @db.Decimal(14, 2)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@map("vendor_payments")
+}
+
+model PelletSale {
+  id           String   @id @default(cuid())
+  invoiceNo    Int      @unique @default(autoincrement())
+  date         DateTime @db.Date
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  quantityBags Decimal  @db.Decimal(12, 2)
+  ratePerBag   Decimal  @db.Decimal(12, 2)
+  notes        String?
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([date])
+  @@map("pellet_sales")
+}
+
+model ProductionDay {
+  id             String   @id @default(cuid())
+  date           DateTime @unique @db.Date
+  dayShiftBags   Decimal  @default(0) @db.Decimal(12, 2)
+  nightShiftBags Decimal  @default(0) @db.Decimal(12, 2)
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@map("production_days")
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  item      String
+  amount    Decimal  @db.Decimal(14, 2)
+  category  String   @default("Maintenance")
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@map("expenses")
+}
+
+model ElectricityBill {
+  id            String   @id @default(cuid())
+  month         DateTime @unique @db.Date // first day of the billing month
+  billAmount    Decimal  @db.Decimal(14, 2)
+  unitsConsumed Decimal  @db.Decimal(12, 2)
+  createdAt     DateTime @default(now())
+
+  @@map("electricity_bills")
+}
+
+// Thekadar (contractor) rate history — labor cost = bags × 40 kg × rate_per_kg.
+model ContractorRate {
+  id            String   @id @default(cuid())
+  effectiveFrom DateTime @unique @db.Date
+  ratePerKg     Decimal  @db.Decimal(8, 2)
+  createdAt     DateTime @default(now())
+
+  @@map("contractor_rates")
+}
+
+model ContractorPayment {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  amount    Decimal  @db.Decimal(14, 2)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@map("contractor_payments")
+}
+
+// Manual ledger entries: positive = owed to contractor (e.g. opening balance
+// carried from the old sheets), negative = owed by contractor.
+model ContractorAdjustment {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  amount    Decimal  @db.Decimal(14, 2)
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([date, reason])
+  @@map("contractor_adjustments")
+}
