@@ -12,6 +12,6 @@ export const config = {
   // and static/asset files. /login is public but still runs the callback,
   // which lets it through because it isn't gated.
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|manifest.webmanifest|icons?/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|manifest.json|manifest.webmanifest|sw.js|apple-touch-icon.png|icons?/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

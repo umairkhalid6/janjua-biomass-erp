@@ -141,6 +141,28 @@ Update it as significant decisions are made.
 
 ---
 
+## PWA (Progressive Web App) — Added 2026-07-06 (reworked same day)
+
+**No PWA plugin.** `@ducanh2912/next-pwa` was tried and REMOVED: it hooks into webpack,
+and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.md).
+
+**Current setup (hand-rolled, zero deps):**
+- **Service worker:** plain static file `public/sw.js` — cache-first for `/_next/static/`,
+  `/icons/`, and font/image files ONLY. All other requests (documents, `/api/*`, server
+  actions) are not intercepted → financial data is never cached/stale. Bump the
+  `STATIC_CACHE` version string in sw.js when changing caching behavior.
+- **Registration:** `src/components/sw-register.tsx` ("use client", production only),
+  rendered from the root layout.
+- **Icons:** SVG templates in `public/icons/*.svg` + `public/apple-touch-icon.svg`,
+  rendered to PNG with macOS `qlmanage -t -s <size>` (the hand-rolled PNG writer in
+  `scripts/generate-icons.js` produced corrupt files — do not reuse it for PNGs).
+- **Manifest:** `public/manifest.json`, dark green theme (#065f46), standalone display;
+  wired via `metadata`/`viewport` exports in `src/app/layout.tsx`.
+
+**Why this design:** The 5433 port mapping is specific to this developer's machine (native Postgres on 5432); future agents may work on different machines. The PWA supports offline fallback for the UI shell only — critical business rule is that financial data never stays cached/stale.
+
+---
+
 ## Reporting / Dashboard Layer (added 2026-07-06)
 
 ### Home dashboard (`src/app/(app)/page.tsx`)

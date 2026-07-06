@@ -57,6 +57,36 @@ is contravariantly incompatible with what `<Tooltip>` expects.
 `const fmt: TooltipFormatter = (v, name) => [formatPKR(Number(v)), String(name)]`, and pass
 `formatter={fmt}`. Coerce value/name with `Number()`/`String()` inside — do NOT narrow the params.
 
+## 2026-07-06 — PWA setup and documentation (not an error — recorded for reference)
+**Setup completed:**
+- Installed `@ducanh2912/next-pwa@10.2.9` with Workbox; compatible with Next 16
+- Configured caching to exclude financial data (HTML, /api/*, server actions) — all use NetworkFirst with no fallback
+- Generated app shell caching for `_next/static` and `/public` (24-hour max age)
+- Created `public/manifest.json` with dark green theme and icon references
+- Generated PWA icons programmatically (192x192, 512x512, maskable variants, 180x180 apple-touch-icon) via node script using PNG binary headers
+- Updated `src/app/layout.tsx` with `manifest`, `appleWebApp`, and `viewport` metadata exports
+- Updated `next.config.ts` to wrap with withPWA, disabling in development
+- Completed comprehensive README.md with all sections (overview, quick start, dev guide, phone access, deployment, PWA installation, troubleshooting)
+- Verified `npm run build` completes successfully; manifest and icon assets present in `.next/standalone/public/`
+
+**Key decisions:**
+- Chose `@ducanh2912/next-pwa` over `@serwist/next` because it's simpler, battle-tested, and uses Workbox (industry standard)
+- Icons are "any + maskable" — ensures compatibility across platforms and future app store requirements
+- Service worker auto-generated at build time; no manual registration needed
+- 5433 port note documented in `.env.example` for future developers working on this machine
+
+## 2026-07-06 — Hand-rolled PNG icons were corrupt / marginal
+**Error:** `public/icons/icon-512*.png` were 0×0 (unreadable); the 192px ones opened in `sips` but failed stricter decoders.
+**Cause:** `scripts/generate-icons.js` writes PNG chunks by hand and produced invalid files at 512px.
+**Fix:** Rendered the SVG templates to PNG with macOS `qlmanage -t -s <size>` and replaced all PNGs. If icons ever need regenerating, prefer `qlmanage`/a real image library over the hand-rolled writer.
+
+## 2026-07-06 — PWA front-end-nav caching would serve stale financials
+**Error:** (design bug, caught in review) `cacheOnFrontEndNav` + `aggressiveFrontEndNavCaching` were enabled in next.config.ts, which caches page documents on client-side navigation.
+**Cause:** Plugin conveniences conflict with the requirement that financial data is never shown stale.
+**Fix:** Removed both flags; runtimeCaching covers `_next/static` assets only, so documents and API calls always hit the network.
+
+---
+
 ## Sheet bugs fixed structurally in the new schema (documented for the record)
 The old Google Sheets workbook had these calculation errors, which the SQL views fix by construction:
 1. `Main!N16` (Total Monthly Cost) added chip **weight (KG)** instead of chip **cost (PKR)** and omitted the actual chip cost.

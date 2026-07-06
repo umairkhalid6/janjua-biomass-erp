@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "erp-docker",
+      "runtimeExecutable": "/Applications/Docker.app/Contents/Resources/bin/docker",
+      "runtimeArgs": ["compose", "up", "app"],
+      "port": 3010
+    }
+  ]
+}
