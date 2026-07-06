@@ -42,6 +42,21 @@ contributors can find solutions quickly.
 **Cause:** The `next-auth/jwt` module augmentation for `JWT.id`/`JWT.role` wasn't reliably applied inside the edge config, so `token.id` stayed `unknown`.
 **Fix:** Cast at the assignment (`token.id as string`, `token.role as Role`). Augmentation still lives in `src/types/next-auth.d.ts` for session typing everywhere else.
 
+## 2026-07-06 — recharts 3 Tooltip `formatter`: implicit-any / incompatible-signature type errors
+**Error:** Building the report charts failed to type-check on every `<Tooltip formatter={...}>`.
+First `Parameter 'v' implicitly has an 'any' type`, then (after adding explicit param types)
+`Type '(v: number, ...) => ...' is not assignable to type 'Formatter<ValueType, NameType>'` —
+`ValueType | undefined` (which includes `ReadonlyArray<number|string>`) is not assignable to a
+narrowed `number`.
+**Cause:** recharts 3's `Formatter` value param is `ValueType | undefined` where
+`ValueType = number | string | ReadonlyArray<number|string>`. A hand-written or narrowed signature
+is contravariantly incompatible with what `<Tooltip>` expects.
+**Fix:** Export `type TooltipFormatter = Formatter` (imported from
+`recharts/types/component/DefaultTooltipContent`, default generics) in
+`src/components/charts/palette.ts`, define each formatter as a module-level
+`const fmt: TooltipFormatter = (v, name) => [formatPKR(Number(v)), String(name)]`, and pass
+`formatter={fmt}`. Coerce value/name with `Number()`/`String()` inside — do NOT narrow the params.
+
 ## Sheet bugs fixed structurally in the new schema (documented for the record)
 The old Google Sheets workbook had these calculation errors, which the SQL views fix by construction:
 1. `Main!N16` (Total Monthly Cost) added chip **weight (KG)** instead of chip **cost (PKR)** and omitted the actual chip cost.

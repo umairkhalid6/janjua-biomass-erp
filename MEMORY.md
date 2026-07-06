@@ -138,3 +138,47 @@ Update it as significant decisions are made.
 - `/vendors` → `src/app/(app)/vendors/`
 - `/contractor` → `src/app/(app)/contractor/` (balance from `v_contractor_ledger` via `$queryRaw`)
 - `/settings` → `src/app/(app)/settings/` (ADMIN — contractor rate history)
+
+---
+
+## Reporting / Dashboard Layer (added 2026-07-06)
+
+### Home dashboard (`src/app/(app)/page.tsx`)
+- Role-aware server component. ADMIN sees current-month headline cards (Sales / Total Cost /
+  Profit / Production from `v_monthly_summary`), contractor balance (last row of
+  `v_contractor_ledger`), quick links, and a 6-month profit trend area chart. OPERATOR sees only
+  today's production (queried from `production_days`) + Log Production / Record Sale shortcuts.
+- Today's production keys on `toDateInputValue(new Date())` cast to `::date`.
+
+### Report pages (`src/app/(app)/reports/*`, all ADMIN)
+- `/reports` — landing cards. `/reports/pnl` — P&L table + 12-month history + profit bar chart.
+  `/reports/production` — daily day/night table + stacked daily chart + 12-month trend line.
+  `/reports/materials` — per-material cards/table + 6-month stacked cost chart.
+  `/reports/contractor` — running-balance ledger filtered by month with an opening-balance line +
+  earned-vs-paid chart. `/reports/customers` & `/reports/vendors` — simple sorted ledger tables.
+- Every page calls `await requireAdmin()` first (belt-and-braces beyond middleware).
+
+### Raw-query conventions (views are the data API)
+- Query views with `prisma.$queryRaw<RowType[]>\`...\``. **pg returns numerics as strings** —
+  coerce EVERY numeric column with `Number()` before use/serialization. Row types declare numeric
+  columns as `string | number`.
+- View column names differ from the older `/contractor` CRUD page: the real columns are `date`,
+  `entry_type`, `description`, `amount`, `balance` (NOT `entry_date`/`running_balance`). Check
+  `information_schema.columns` when unsure.
+- **Contractor "current balance"** = the row that is LAST in the window's order
+  (`ORDER BY date, entry_type, description`). Query it with
+  `ORDER BY date DESC, entry_type DESC, description DESC LIMIT 1` — sorting by date alone can pick
+  the wrong row (seed final balance = 504,730).
+
+### Charts (`src/components/charts/*`, recharts 3.9)
+- `recharts` is the only new dependency. Each chart is a small `"use client"` component taking
+  plain serializable number props (no Decimals/Dates). Server pages pre-map view rows into
+  `{ label, ... }` arrays.
+- Shared palette + tooltip-formatter type in `src/components/charts/palette.ts`. Tooltip
+  `formatter` MUST be typed `TooltipFormatter` (= recharts' `Formatter` from
+  `recharts/types/component/DefaultTooltipContent`) and coerce value/name with `Number`/`String`
+  inside — see ERRORS.md for why a narrowed signature fails to type-check.
+- Components: `profit-bar-chart`, `profit-trend-chart` (area), `production-daily-chart` (stacked),
+  `production-trend-chart` (line), `material-stacked-chart` (dynamic series), `contractor-monthly-chart`.
+  `compact()` + `tooltipStyle` are shared out of `profit-bar-chart.tsx`.
+- All charts use `ResponsiveContainer` (heights 200-260px), PKR-formatted tooltips via `formatPKR`.

@@ -13,12 +13,11 @@ import { MonthPicker } from "@/components/month-picker";
 import { PaymentForm, AdjustmentForm } from "./contractor-forms";
 
 type LedgerRow = {
-  entry_date: Date;
+  date: Date;
   entry_type: string;
+  description: string;
   amount: string | number;
-  running_balance: string | number;
-  notes: string | null;
-  reason: string | null;
+  balance: string | number;
 };
 
 export default async function ContractorPage({
@@ -31,14 +30,15 @@ export default async function ContractorPage({
   const month = sp.month ?? currentMonthParam();
   const { gte, lte } = monthRange(month);
 
-  // Get current balance from the view (last row's running_balance)
+  // Current balance = last row of the running-balance view (same ordering
+  // as the view's window function: date, entry_type, description).
   const ledgerRows = await prisma.$queryRaw<LedgerRow[]>`
-    SELECT * FROM v_contractor_ledger ORDER BY entry_date, entry_type
+    SELECT * FROM v_contractor_ledger ORDER BY date, entry_type, description
   `;
 
   const currentBalance =
     ledgerRows.length > 0
-      ? Number(ledgerRows[ledgerRows.length - 1].running_balance)
+      ? Number(ledgerRows[ledgerRows.length - 1].balance)
       : 0;
 
   const [payments, adjustments] = await Promise.all([
