@@ -24,8 +24,8 @@ Set these on the **app service** in Railway → Variables:
 |-------------------|----------|-------|
 | `DATABASE_URL`    | ✅       | Reference the Postgres plugin, e.g. `${{Postgres.DATABASE_URL}}`. Append `?schema=public` if not already present. |
 | `AUTH_SECRET`     | ✅       | NextAuth session signing key. Generate with `openssl rand -base64 32`. Sessions break without it. |
-| `AUTH_TRUST_HOST` | ✅       | Set to `true` (required behind Railway's proxy). |
-| `AUTH_URL`        | ✅       | Public HTTPS URL of the app, e.g. `https://your-app.up.railway.app`. |
+| `AUTH_TRUST_HOST` | —        | No longer needed — `trustHost: true` is hardcoded in `src/auth.config.ts`. |
+| `AUTH_URL`        | optional | Public HTTPS URL, e.g. `https://your-app.up.railway.app`. If unset or malformed it's ignored and the host is read from Railway's proxy. **Never set it to a bare `https://` / an empty domain reference** — that used to 500 the whole app (now guarded). |
 | `ADMIN_EMAIL`     | bootstrap | Email for the first admin the seed creates. **Omit after first deploy** if you'd rather create admins in the UI. |
 | `ADMIN_PASSWORD`  | bootstrap | Password for that admin (no default — seed skips admin creation if unset). |
 | `ADMIN_NAME`      | optional | Display name for the bootstrap admin (defaults to `Admin`). |

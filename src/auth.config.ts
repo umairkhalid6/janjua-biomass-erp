@@ -4,11 +4,35 @@ import type { Role } from "@prisma/client";
 // Edge-safe config: no Prisma / bcrypt here (middleware runs on the edge
 // runtime where the Prisma pg adapter cannot run). The Credentials provider
 // with the DB lookup is added only in src/auth.ts (Node runtime).
-//
+
+// --- AUTH_URL guard -------------------------------------------------------
+// Auth.js builds internal URLs from AUTH_URL / NEXTAUTH_URL. A malformed value
+// (e.g. `https://` when a Railway domain variable resolves empty) makes it
+// throw `TypeError: Invalid URL` on EVERY request and the whole app 500s.
+// If the value isn't a valid absolute URL with a host, drop it so Auth.js
+// falls back to detecting the host from the proxy headers (trustHost below).
+(() => {
+  for (const key of ["AUTH_URL", "NEXTAUTH_URL"] as const) {
+    const raw = process.env[key];
+    if (!raw) continue;
+    try {
+      const u = new URL(raw);
+      if (!u.hostname) throw new Error("missing host");
+    } catch {
+      delete process.env[key];
+    }
+  }
+})();
+
 // Role-gated route prefixes — ADMIN only.
 const ADMIN_PREFIXES = ["/reports", "/settings", "/users"];
 
 export const authConfig = {
+  // Trust the host provided by Railway's proxy (x-forwarded-host). Required
+  // for any self-hosted (non-Vercel) deployment behind a reverse proxy, and
+  // makes auth work even if AUTH_URL is unset. Hardcoded (not read from
+  // AUTH_TRUST_HOST) so a missing env var can't break login again.
+  trustHost: true,
   pages: { signIn: "/login" },
   session: { strategy: "jwt" },
   callbacks: {

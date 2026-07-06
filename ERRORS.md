@@ -17,6 +17,11 @@ contributors can find solutions quickly.
 
 <!-- Append new entries below this line -->
 
+## 2026-07-06 — Railway prod: `TypeError: Invalid URL` (input `'https://'`) on every request
+**Error:** Container starts fine ("Ready in 0ms") but every request 500s with `TypeError: Invalid URL … code: 'ERR_INVALID_URL', input: 'https://'` in the edge middleware chunk.
+**Cause:** Auth.js (NextAuth v5) builds internal URLs from `AUTH_URL`/`NEXTAUTH_URL`. The Railway var was set to a bare `https://` with no host (typically `https://${{RAILWAY_PUBLIC_DOMAIN}}` where the domain reference resolves empty). `new URL("https://")` throws — the crash is inside Auth.js, before our `authorized` callback runs.
+**Fix:** Two layers, in `src/auth.config.ts`: (1) an IIFE at module load validates `AUTH_URL`/`NEXTAUTH_URL` and `delete`s them if they aren't a valid absolute URL with a host; (2) `trustHost: true` hardcoded in the config so the host is taken from Railway's `x-forwarded-host` proxy header regardless of env. On Railway, set `AUTH_URL` to the real domain (e.g. `https://your-app.up.railway.app`) or remove it entirely — auth now works either way. `AUTH_SECRET` is still required.
+
 ## 2026-07-06 — Prisma P1010 "User was denied access" on localhost:5432
 **Error:** `P1010: User was denied access on the database` from every Prisma CLI command, while `psql` inside the container worked fine.
 **Cause:** A native (non-Docker) Postgres already listens on 127.0.0.1:5432 on this machine. Prisma was connecting to it instead of the compose container, and user `erp` doesn't exist there.
