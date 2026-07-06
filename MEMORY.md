@@ -94,3 +94,47 @@ Update it as significant decisions are made.
   pages as `src/app/(app)/<route>/page.tsx` and an entry in nav-items.ts.
 - **User management:** `/users` (ADMIN only) — create/toggle-active/reset-password via plain
   server actions in `src/app/(app)/users/actions.ts`. Admins can't deactivate themselves.
+
+---
+
+## CRUD Conventions (added 2026-07-06)
+
+### Form pattern
+- Pages are server components; forms are `"use client"` in a co-located `*-forms.tsx` file.
+- Actions are `"use server"` in `actions.ts` with `export type ActionState = { error?: string; ok?: string }`.
+- Client forms use `useActionState<ActionState, FormData>(action, {})` + `useFormStatus` for the submit button spinner.
+- Call `requireUser()` (or `requireAdmin()` for admin mutations) at the top of every server action.
+- Call `revalidatePath("/route")` after every successful mutation.
+- Use `parseDateInput(value: string): Date` from `src/lib/format.ts` to convert `<input type="date">` strings to UTC-midnight Date objects (avoids timezone shift).
+- Serialize Prisma `Decimal` values via `.toNumber()` before passing to any client component or plain object.
+
+### Format helpers (`src/lib/format.ts`)
+- `formatPKR(n)` — PKR currency string via Intl.NumberFormat
+- `formatDate(date)` — DD/MM/YYYY
+- `formatMonth(month)` — "July 2026"
+- `parseMonthParam(s)` — YYYY-MM → UTC midnight Date (1st of month)
+- `parseDateInput(s)` — YYYY-MM-DD → UTC midnight Date
+- `currentMonthParam()` — current month as "YYYY-MM"
+- `toDateInputValue(date)` — Date → "YYYY-MM-DD" (reads UTC parts, no timezone shift)
+- `monthRange(monthParam)` — `{ gte, lte }` for Prisma date range queries
+
+### MonthPicker component (`src/components/month-picker.tsx`)
+- Client component: `<MonthPicker value="YYYY-MM" />` (optional `paramName` prop, default `"month"`).
+- Wrap in `<Suspense>` when used in a server component (reads `useSearchParams`).
+- Page reads `searchParams.month` and falls back to `currentMonthParam()`.
+
+### Invoice page
+- `/sales/[id]/invoice` lives under `src/app/(invoice)/` route group (NOT under `(app)/`) so it renders without the app shell nav.
+- Has its own minimal layout at `src/app/(invoice)/sales/[id]/invoice/layout.tsx`.
+- Uses `print:hidden` on the controls bar; `window.print()` via `<PrintButton>` client component.
+
+### Module locations
+- `/production` → `src/app/(app)/production/` (upsert by date — unique constraint)
+- `/sales` → `src/app/(app)/sales/` (delete = ADMIN only via `requireAdmin()`)
+- `/purchases` → `src/app/(app)/purchases/` (material filter via `?material=` query param)
+- `/expenses` → `src/app/(app)/expenses/` (category datalist from existing DB values)
+- `/electricity` → `src/app/(app)/electricity/` (upsert by month)
+- `/customers` → `src/app/(app)/customers/`
+- `/vendors` → `src/app/(app)/vendors/`
+- `/contractor` → `src/app/(app)/contractor/` (balance from `v_contractor_ledger` via `$queryRaw`)
+- `/settings` → `src/app/(app)/settings/` (ADMIN — contractor rate history)
