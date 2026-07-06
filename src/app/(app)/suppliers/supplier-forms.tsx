@@ -3,9 +3,9 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  createCustomer,
-  updateCustomer,
-  createCustomerPayment,
+  createSupplier,
+  updateSupplier,
+  createSupplierPayment,
   type ActionState,
 } from "./actions";
 
@@ -25,35 +25,35 @@ function Submit({ label }: { label: string }) {
   );
 }
 
-type CustomerRow = {
+type SupplierRow = {
   id: string;
   name: string;
-  company: string | null;
   phone: string | null;
+  notes: string | null;
   openingBalance?: number;
 };
 
-function CustomerFields({ existing }: { existing?: CustomerRow }) {
+function SupplierFields({ existing }: { existing?: SupplierRow }) {
   return (
     <>
       {existing && <input type="hidden" name="id" value={existing.id} />}
       <input
         name="name"
-        placeholder="Customer name"
+        placeholder="Supplier name"
         required
         defaultValue={existing?.name ?? ""}
-        className={input}
-      />
-      <input
-        name="company"
-        placeholder="Company (optional)"
-        defaultValue={existing?.company ?? ""}
         className={input}
       />
       <input
         name="phone"
         placeholder="Phone (optional)"
         defaultValue={existing?.phone ?? ""}
+        className={input}
+      />
+      <input
+        name="notes"
+        placeholder="Notes (optional)"
+        defaultValue={existing?.notes ?? ""}
         className={input}
       />
       <div>
@@ -73,20 +73,16 @@ function CustomerFields({ existing }: { existing?: CustomerRow }) {
   );
 }
 
-export function CreateCustomerForm({
-  onSuccess,
-}: {
-  onSuccess?: (id: string, name: string) => void;
-}) {
+export function CreateSupplierForm() {
   const [state, action] = useActionState<ActionState, FormData>(
-    createCustomer,
+    createSupplier,
     {}
   );
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-4">
-      <CustomerFields />
+      <SupplierFields />
       <div className="sm:col-span-4 flex items-center gap-3">
-        <Submit label="Add Customer" />
+        <Submit label="Add Supplier" />
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>
         )}
@@ -98,14 +94,14 @@ export function CreateCustomerForm({
   );
 }
 
-export function EditCustomerForm({ existing }: { existing: CustomerRow }) {
+export function EditSupplierForm({ existing }: { existing: SupplierRow }) {
   const [state, action] = useActionState<ActionState, FormData>(
-    updateCustomer,
+    updateSupplier,
     {}
   );
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
-      <CustomerFields existing={existing} />
+      <SupplierFields existing={existing} />
       <div className="sm:col-span-2 flex items-center gap-3">
         <Submit label="Update" />
         {state.error && (
@@ -121,14 +117,14 @@ export function EditCustomerForm({ existing }: { existing: CustomerRow }) {
 
 const METHODS = ["Cash", "Bank", "Cheque", "Online"];
 
-export function CustomerPaymentForm({ customerId }: { customerId: string }) {
+export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
   const [state, action] = useActionState<ActionState, FormData>(
-    createCustomerPayment,
+    createSupplierPayment,
     {}
   );
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
-      <input type="hidden" name="customerId" value={customerId} />
+      <input type="hidden" name="supplierId" value={supplierId} />
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date

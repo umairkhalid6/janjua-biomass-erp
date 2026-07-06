@@ -85,6 +85,21 @@ is contravariantly incompatible with what `<Tooltip>` expects.
 **Cause:** Plugin conveniences conflict with the requirement that financial data is never shown stale.
 **Fix:** Removed both flags; runtimeCaching covers `_next/static` assets only, so documents and API calls always hit the network.
 
+## 2026-07-06 — /production (and 4 other CRUD pages) crashed on load
+**Error:** Clicking Production (also Sales, Purchases, Expenses, Electricity) crashed the page with Next.js "Event handlers cannot be passed to Client Component props" (digest error in production build).
+**Cause:** The Delete buttons in these server-component pages had an inline `onClick={(e) => { if (!confirm(...)) e.preventDefault(); }}` — event handlers can't be serialized from a Server Component. The pages are dynamic (auth + searchParams), so `next build` passed and the crash only surfaced at request time.
+**Fix:** New client component `src/components/delete-button.tsx` (`"use client"`, submit button with the confirm() guard) used inside each delete `<form action={...}>` on all five pages.
+
+## 2026-07-06 — "Quick add customer/vendor" buttons did nothing
+**Error:** On /sales and /purchases, filling the quick-add panel and clicking Add produced no request and no feedback.
+**Cause:** The quick-add `<form action={...}>` was rendered *inside* the main create form. Nested forms are invalid HTML — the browser drops the inner `<form>` tag, so the Add button became a submit button for the outer form, whose empty required fields blocked submission silently.
+**Fix:** Rewrote `QuickAddCustomer`/`QuickAddVendor` without a form: controlled inputs (no `name`, so they don't leak into the outer form's submission) and a `type="button"` Add that calls the server action directly via `startTransition`. `createCustomer`/`createVendor` now return the new `id` so the parent can auto-select it.
+
+## 2026-07-06 — Edit popovers overlapped/clipped on all table screens
+**Error:** The `<details>`-based Edit popover rendered on top of the row's Edit/Delete buttons and was clipped by the table's `overflow-x-auto` container (screenshot from user on /production; same pattern on /sales, /purchases, /expenses, /electricity, /customers, /vendors).
+**Cause:** The popover was absolutely positioned inside the scroll container, so it inherited its clipping and stacking context.
+**Fix:** New `src/components/edit-dialog.tsx` — a fixed-position centered modal with overlay (Escape/backdrop close, body scroll lock) — replaces the `<details>` pattern on all seven screens.
+
 ---
 
 ## Sheet bugs fixed structurally in the new schema (documented for the record)

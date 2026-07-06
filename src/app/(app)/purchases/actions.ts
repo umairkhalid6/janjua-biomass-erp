@@ -27,14 +27,14 @@ export async function createPurchase(
 
   const dateStr = String(formData.get("date") ?? "").trim();
   const materialType = parseMaterial(formData.get("materialType"));
-  const vendorId = String(formData.get("vendorId") ?? "").trim();
+  const supplierId = String(formData.get("supplierId") ?? "").trim();
   const weightStr = String(formData.get("weightKg") ?? "").trim();
   const materialCostStr = String(formData.get("materialCost") ?? "").trim();
   const handlingCostStr = String(formData.get("handlingCost") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!dateStr) return { error: "Date is required." };
-  if (!vendorId) return { error: "Vendor is required." };
+  if (!supplierId) return { error: "Supplier is required." };
   if (!weightStr || !materialCostStr)
     return { error: "Weight and material cost are required." };
 
@@ -50,15 +50,17 @@ export async function createPurchase(
     return { error: "Handling cost must be a non-negative number." };
 
   const date = parseDateInput(dateStr);
+  const ratePerKg = (materialCost + handlingCost) / weightKg;
 
   await prisma.materialPurchase.create({
     data: {
       date,
       materialType,
-      vendorId,
+      supplierId,
       weightKg,
       materialCost,
       handlingCost,
+      ratePerKg,
       notes: notes || null,
     },
   });
@@ -76,7 +78,7 @@ export async function updatePurchase(
   const id = String(formData.get("id") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();
   const materialType = parseMaterial(formData.get("materialType"));
-  const vendorId = String(formData.get("vendorId") ?? "").trim();
+  const supplierId = String(formData.get("supplierId") ?? "").trim();
   const weightStr = String(formData.get("weightKg") ?? "").trim();
   const materialCostStr = String(formData.get("materialCost") ?? "").trim();
   const handlingCostStr = String(formData.get("handlingCost") ?? "").trim();
@@ -84,7 +86,7 @@ export async function updatePurchase(
 
   if (!id) return { error: "Purchase ID missing." };
   if (!dateStr) return { error: "Date is required." };
-  if (!vendorId) return { error: "Vendor is required." };
+  if (!supplierId) return { error: "Supplier is required." };
   if (!weightStr || !materialCostStr)
     return { error: "Weight and material cost are required." };
 
@@ -100,16 +102,18 @@ export async function updatePurchase(
     return { error: "Handling cost must be non-negative." };
 
   const date = parseDateInput(dateStr);
+  const ratePerKg = (materialCost + handlingCost) / weightKg;
 
   await prisma.materialPurchase.update({
     where: { id },
     data: {
       date,
       materialType,
-      vendorId,
+      supplierId,
       weightKg,
       materialCost,
       handlingCost,
+      ratePerKg,
       notes: notes || null,
     },
   });

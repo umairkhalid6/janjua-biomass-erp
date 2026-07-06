@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { createExpense, updateExpense, type ActionState } from "./actions";
+import { SearchableSelect } from "@/components/searchable-select";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -81,19 +82,14 @@ function ExpenseFields({
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Category
         </label>
-        <input
+        <SearchableSelect
           name="category"
-          type="text"
-          list="category-list"
-          placeholder="Maintenance"
+          required
+          allowCustom
+          placeholder="Search or add category…"
           defaultValue={existing?.category ?? "Maintenance"}
-          className={input}
+          options={categories.map((c) => ({ value: c, label: c }))}
         />
-        <datalist id="category-list">
-          {categories.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
       </div>
     </>
   );

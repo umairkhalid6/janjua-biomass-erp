@@ -10,6 +10,8 @@ import {
   toDateInputValue,
 } from "@/lib/format";
 import { MonthPicker } from "@/components/month-picker";
+import { DeleteButton } from "@/components/delete-button";
+import { EditDialog } from "@/components/edit-dialog";
 import { CreateExpenseForm, EditExpenseForm } from "./expense-forms";
 import { deleteExpense } from "./actions";
 
@@ -113,28 +115,12 @@ export default async function ExpensesPage({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <details className="relative">
-                        <summary className="list-none cursor-pointer rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800">
-                          Edit
-                        </summary>
-                        <div className="absolute left-0 top-8 z-10 w-80 rounded-xl border border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-                          <EditExpenseForm
-                            existing={row}
-                            categories={categories}
-                          />
-                        </div>
-                      </details>
+                      <EditDialog title="Edit Expense">
+                        <EditExpenseForm existing={row} categories={categories} />
+                      </EditDialog>
                       <form action={deleteExpense}>
                         <input type="hidden" name="id" value={row.id} />
-                        <button
-                          type="submit"
-                          className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-                          onClick={(e) => {
-                            if (!confirm("Delete this expense?")) e.preventDefault();
-                          }}
-                        >
-                          Delete
-                        </button>
+                        <DeleteButton confirmMessage="Delete this expense?" />
                       </form>
                     </div>
                   </td>

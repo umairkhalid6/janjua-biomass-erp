@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { createSale, updateSale, type ActionState } from "./actions";
-import { createCustomer, type ActionState as CustomerActionState } from "@/app/(app)/customers/actions";
+import { createCustomer } from "@/app/(app)/customers/actions";
+import { SearchableSelect } from "@/components/searchable-select";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -32,16 +33,24 @@ type SaleRow = {
   notes: string | null;
 };
 
+function customerLabel(c: CustomerOption) {
+  return `${c.name}${c.company ? ` — ${c.company}` : ""}`;
+}
+
+// Calls the server action directly instead of rendering a nested <form>.
+// Nested forms are invalid HTML — the browser strips the inner tag, so the
+// old Add button silently tried to submit the outer sale form and did nothing.
 function QuickAddCustomer({
   onAdded,
 }: {
   onAdded: (id: string, name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [state, action] = useActionState<CustomerActionState, FormData>(
-    createCustomer,
-    {}
-  );
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   if (!open) {
     return (
@@ -55,17 +64,73 @@ function QuickAddCustomer({
     );
   }
 
+  const submit = () => {
+    if (!name.trim()) {
+      setError("Customer name is required.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("name", name);
+      fd.set("company", company);
+      fd.set("phone", phone);
+      const res = await createCustomer({}, fd);
+      if (res.error) {
+        setError(res.error);
+      } else if (res.id) {
+        onAdded(res.id, name.trim());
+        setName("");
+        setCompany("");
+        setPhone("");
+        setOpen(false);
+      }
+    });
+  };
+
+  const onEnter = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+  };
+
   return (
     <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800">
       <p className="mb-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
         Quick add customer
       </p>
-      <form action={action} className="grid gap-2 sm:grid-cols-3">
-        <input name="name" placeholder="Name" required className={input} />
-        <input name="company" placeholder="Company" className={input} />
-        <input name="phone" placeholder="Phone" className={input} />
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={onEnter}
+          className={input}
+        />
+        <input
+          placeholder="Company"
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          onKeyDown={onEnter}
+          className={input}
+        />
+        <input
+          placeholder="Phone"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          onKeyDown={onEnter}
+          className={input}
+        />
         <div className="sm:col-span-3 flex items-center gap-2">
-          <Submit label="Add" />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={pending}
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-800 disabled:opacity-60"
+          >
+            {pending ? "Adding…" : "Add Customer"}
+          </button>
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -73,14 +138,9 @@ function QuickAddCustomer({
           >
             Cancel
           </button>
-          {state.error && (
-            <span className="text-xs text-red-600">{state.error}</span>
-          )}
-          {state.ok && (
-            <span className="text-xs text-green-700">{state.ok}</span>
-          )}
+          {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -92,6 +152,7 @@ export function CreateSaleForm({
 }) {
   const [state, action] = useActionState<ActionState, FormData>(createSale, {});
   const [localCustomers, setLocalCustomers] = useState(customers);
+  const [customerId, setCustomerId] = useState("");
 
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
@@ -105,21 +166,24 @@ export function CreateSaleForm({
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Customer
         </label>
-        <select name="customerId" required className={input}>
-          <option value="">Select customer…</option>
-          {localCustomers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.company ? ` — ${c.company}` : ""}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="customerId"
+          required
+          placeholder="Search customer…"
+          value={customerId}
+          onChange={setCustomerId}
+          options={localCustomers.map((c) => ({
+            value: c.id,
+            label: customerLabel(c),
+          }))}
+        />
       </div>
       <div className="sm:col-span-2">
         <QuickAddCustomer
-          onAdded={(id, name) =>
-            setLocalCustomers((prev) => [...prev, { id, name, company: null }])
-          }
+          onAdded={(id, name) => {
+            setLocalCustomers((prev) => [...prev, { id, name, company: null }]);
+            setCustomerId(id);
+          }}
         />
       </div>
       <div>
@@ -202,15 +266,16 @@ export function EditSaleForm({
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Customer
         </label>
-        <select name="customerId" required defaultValue={existing.customerId} className={input}>
-          <option value="">Select customer…</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.company ? ` — ${c.company}` : ""}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="customerId"
+          required
+          placeholder="Search customer…"
+          defaultValue={existing.customerId}
+          options={customers.map((c) => ({
+            value: c.id,
+            label: customerLabel(c),
+          }))}
+        />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">

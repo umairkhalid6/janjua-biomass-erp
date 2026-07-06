@@ -16,7 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/expenses", label: "Expenses" },
   { href: "/reports", label: "Reports", adminOnly: true },
   { href: "/customers", label: "Customers", adminOnly: true },
-  { href: "/vendors", label: "Vendors", adminOnly: true },
+  { href: "/suppliers", label: "Suppliers", adminOnly: true },
   { href: "/contractor", label: "Contractor", adminOnly: true },
   { href: "/electricity", label: "Electricity", adminOnly: true },
   { href: "/users", label: "Users", adminOnly: true },

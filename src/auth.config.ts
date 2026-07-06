@@ -34,6 +34,11 @@ export const authConfig = {
       const { pathname } = request.nextUrl;
       const isLoggedIn = !!auth?.user;
 
+      // Public tokenized invoice links (shared on WhatsApp) — no auth. The
+      // token in the path is the only credential; the page shows a single
+      // invoice and nothing else.
+      if (pathname.startsWith("/i/")) return true;
+
       // /login is public. Send already-authed users to the dashboard.
       if (pathname === "/login") {
         if (isLoggedIn) {

@@ -14,41 +14,41 @@ export async function upsertProductionDay(
   await requireUser();
 
   const dateStr = String(formData.get("date") ?? "").trim();
-  const dayShift = String(formData.get("dayShiftBags") ?? "").trim();
-  const nightShift = String(formData.get("nightShiftBags") ?? "").trim();
+  const shift = String(formData.get("shift") ?? "") === "NIGHT" ? "NIGHT" : "DAY";
+  const bagsStr = String(formData.get("bags") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!dateStr) return { error: "Date is required." };
-  if (dayShift === "" && nightShift === "")
-    return { error: "At least one shift bag count is required." };
+  if (bagsStr === "") return { error: "Bag count is required." };
 
-  const dayShiftBags = parseFloat(dayShift || "0");
-  const nightShiftBags = parseFloat(nightShift || "0");
-
-  if (isNaN(dayShiftBags) || dayShiftBags < 0)
-    return { error: "Day shift bags must be a non-negative number." };
-  if (isNaN(nightShiftBags) || nightShiftBags < 0)
-    return { error: "Night shift bags must be a non-negative number." };
+  const bags = parseFloat(bagsStr);
+  if (isNaN(bags) || bags < 0)
+    return { error: "Bags must be a non-negative number." };
 
   const date = parseDateInput(dateStr);
+  const shiftField =
+    shift === "DAY" ? { dayShiftBags: bags } : { nightShiftBags: bags };
 
+  // One row per date; saving a shift only touches that shift's column so the
+  // other shift's entry for the same day is preserved.
   await prisma.productionDay.upsert({
     where: { date },
     create: {
       date,
-      dayShiftBags,
-      nightShiftBags,
+      dayShiftBags: shift === "DAY" ? bags : 0,
+      nightShiftBags: shift === "NIGHT" ? bags : 0,
       notes: notes || null,
     },
     update: {
-      dayShiftBags,
-      nightShiftBags,
-      notes: notes || null,
+      ...shiftField,
+      ...(notes ? { notes } : {}),
     },
   });
 
   revalidatePath("/production");
-  return { ok: "Production day saved." };
+  return {
+    ok: `${shift === "DAY" ? "Day" : "Night"} shift saved.`,
+  };
 }
 
 export async function deleteProductionDay(formData: FormData): Promise<void> {

@@ -2,23 +2,23 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatPKR } from "@/lib/format";
 
-type VendorRow = {
-  vendor_id: string;
+type SupplierRow = {
+  supplier_id: string;
   name: string;
   total_purchased: string | number;
   total_paid: string | number;
   balance_owed: string | number;
 };
 
-export default async function VendorsReportPage() {
+export default async function SuppliersReportPage() {
   await requireAdmin();
 
-  const ledger = await prisma.$queryRaw<VendorRow[]>`
-    SELECT * FROM v_vendor_ledger ORDER BY balance_owed DESC, name ASC
+  const ledger = await prisma.$queryRaw<SupplierRow[]>`
+    SELECT * FROM v_supplier_summary ORDER BY balance_owed DESC, name ASC
   `;
 
   const rows = ledger.map((r) => ({
-    id: r.vendor_id,
+    id: r.supplier_id,
     name: r.name,
     purchased: Number(r.total_purchased),
     paid: Number(r.total_paid),
@@ -32,7 +32,7 @@ export default async function VendorsReportPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Vendors</h1>
+        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Suppliers</h1>
         <p className="mt-0.5 text-sm text-neutral-500">Purchases, payments and balance owed (all time).</p>
       </div>
 
@@ -41,7 +41,7 @@ export default async function VendorsReportPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
               <tr>
-                <th className="px-4 py-3 font-medium">Vendor</th>
+                <th className="px-4 py-3 font-medium">Supplier</th>
                 <th className="px-4 py-3 text-right font-medium">Purchased</th>
                 <th className="px-4 py-3 text-right font-medium">Paid</th>
                 <th className="px-4 py-3 text-right font-medium">Balance Owed</th>
@@ -51,7 +51,7 @@ export default async function VendorsReportPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-sm text-neutral-400">
-                    No vendors yet.
+                    No suppliers yet.
                   </td>
                 </tr>
               )}

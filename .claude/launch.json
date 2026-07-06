@@ -6,6 +6,19 @@
       "runtimeExecutable": "/Applications/Docker.app/Contents/Resources/bin/docker",
       "runtimeArgs": ["compose", "up", "app"],
       "port": 3010
+    },
+    {
+      "name": "erp-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "-p", "3011"],
+      "port": 3011
+    },
+    {
+      "name": "erp-dev-auto",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3012,
+      "autoPort": true
     }
   ]
 }

@@ -11,6 +11,8 @@ import {
   toDateInputValue,
 } from "@/lib/format";
 import { MonthPicker } from "@/components/month-picker";
+import { DeleteButton } from "@/components/delete-button";
+import { EditDialog } from "@/components/edit-dialog";
 import { CreateSaleForm, EditSaleForm } from "./sale-forms";
 import { deleteSale } from "./actions";
 import { auth } from "@/auth";
@@ -141,36 +143,23 @@ export default async function SalesPage({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <details className="relative">
-                        <summary className="list-none cursor-pointer rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800">
-                          Edit
-                        </summary>
-                        <div className="absolute left-0 top-8 z-10 w-80 rounded-xl border border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-                          <EditSaleForm
-                            existing={{
-                              id: row.id,
-                              date: row.date,
-                              customerId: row.customerId,
-                              quantityBags: row.quantityBags,
-                              ratePerBag: row.ratePerBag,
-                              notes: row.notes,
-                            }}
-                            customers={customerOptions}
-                          />
-                        </div>
-                      </details>
+                      <EditDialog title="Edit Sale">
+                        <EditSaleForm
+                          existing={{
+                            id: row.id,
+                            date: row.date,
+                            customerId: row.customerId,
+                            quantityBags: row.quantityBags,
+                            ratePerBag: row.ratePerBag,
+                            notes: row.notes,
+                          }}
+                          customers={customerOptions}
+                        />
+                      </EditDialog>
                       {isAdmin && (
                         <form action={deleteSale}>
                           <input type="hidden" name="id" value={row.id} />
-                          <button
-                            type="submit"
-                            className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-                            onClick={(e) => {
-                              if (!confirm("Delete this sale?")) e.preventDefault();
-                            }}
-                          >
-                            Delete
-                          </button>
+                          <DeleteButton confirmMessage="Delete this sale?" />
                         </form>
                       )}
                     </div>

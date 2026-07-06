@@ -118,6 +118,19 @@ Update it as significant decisions are made.
 - `toDateInputValue(date)` — Date → "YYYY-MM-DD" (reads UTC parts, no timezone shift)
 - `monthRange(monthParam)` — `{ gte, lte }` for Prisma date range queries
 
+### Shared UI components (added 2026-07-06)
+- `src/components/edit-dialog.tsx` — `<EditDialog title="…">` client modal used for ALL row-edit
+  buttons (production, sales, purchases, expenses, electricity, customers, vendors). Do NOT go back
+  to `<details>` popovers: they get clipped by the tables' `overflow-x-auto` containers.
+- `src/components/searchable-select.tsx` — `<SearchableSelect name options value|defaultValue …>`
+  combobox that submits via a hidden input. Used for every dropdown (customer, vendor, material,
+  shift, expense category). `allowCustom` makes typed text the value and shows a "+ Add" row
+  (expense categories). Semi-controlled: pass `value`+`onChange` to auto-select after quick-add.
+- Quick-add customer/vendor panels must NOT render a nested `<form>` (invalid HTML, browser strips
+  it — button silently submits the outer form). They use controlled inputs without `name` attrs and
+  call the server action directly in `startTransition`; `createCustomer`/`createVendor` return the
+  new `id` in `ActionState` for auto-select.
+
 ### MonthPicker component (`src/components/month-picker.tsx`)
 - Client component: `<MonthPicker value="YYYY-MM" />` (optional `paramName` prop, default `"month"`).
 - Wrap in `<Suspense>` when used in a server component (reads `useSearchParams`).
@@ -129,10 +142,14 @@ Update it as significant decisions are made.
 - Uses `print:hidden` on the controls bar; `window.print()` via `<PrintButton>` client component.
 
 ### Module locations
-- `/production` → `src/app/(app)/production/` (upsert by date — unique constraint)
+- `/production` → `src/app/(app)/production/` (upsert by date — unique constraint; form enters ONE
+  shift at a time via Day/Night dropdown, action only touches that shift's column)
 - `/sales` → `src/app/(app)/sales/` (delete = ADMIN only via `requireAdmin()`)
-- `/purchases` → `src/app/(app)/purchases/` (material filter via `?material=` query param)
-- `/expenses` → `src/app/(app)/expenses/` (category datalist from existing DB values)
+- `/purchases` → `src/app/(app)/purchases/` (material filter via `?material=` query param;
+  `ratePerKg` = (materialCost + handlingCost) / weightKg is computed in the actions and STORED on
+  the row — migration `20260706102643` backfilled old rows)
+- `/expenses` → `src/app/(app)/expenses/` (category = SearchableSelect with `allowCustom` over
+  distinct existing DB values)
 - `/electricity` → `src/app/(app)/electricity/` (upsert by month)
 - `/customers` → `src/app/(app)/customers/`
 - `/vendors` → `src/app/(app)/vendors/`
@@ -204,3 +221,59 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   `production-trend-chart` (line), `material-stacked-chart` (dynamic series), `contractor-monthly-chart`.
   `compact()` + `tooltipStyle` are shared out of `profit-bar-chart.tsx`.
 - All charts use `ResponsiveContainer` (heights 200-260px), PKR-formatted tooltips via `formatPKR`.
+
+---
+
+## Ledgers, Supplier rename & WhatsApp invoices (added 2026-07-06)
+
+### Vendor → Supplier rename
+- Model `Vendor`→`Supplier`, `VendorPayment`→`SupplierPayment`, field `vendorId`→`supplierId`,
+  tables `suppliers`/`supplier_payments`, routes `/vendors`→`/suppliers`,
+  `/reports/vendors`→`/reports/suppliers`. Done via a data-preserving `ALTER TABLE … RENAME`
+  migration (`20260706110000_supplier_rename_and_ledgers`) — no data loss. `prisma.supplier` /
+  `prisma.supplierPayment` are the client accessors. There is NO "vendor" left anywhere in `src/`.
+
+### Running-balance ledgers (the money model)
+- **`CustomerPayment`** (receipts) + **`SupplierPayment`** now both have a `method` field
+  (Cash/Bank/Cheque/Online, default Cash). `Customer` & `Supplier` have an `openingBalance`
+  Decimal (positive = they owe us / we owe them; carried from old sheets).
+- **`v_customer_ledger`** / **`v_supplier_ledger`** — true running-balance transaction views
+  (like `v_contractor_ledger`): OPENING row + each SALE/PURCHASE (debit) + each PAYMENT (credit),
+  with `SUM(amount) OVER (PARTITION BY <party> ORDER BY date NULLS FIRST, sort_order, entry_id)`.
+  Columns: `<party>_id`, `entry_id`, `date`, `entry_type`, `description`, `debit`, `credit`,
+  `amount` (signed), `balance`. **`entry_id` of a SALE row = the sale's `id`; of a PAYMENT row =
+  the payment's `id`** (used directly for invoice links and delete — no fragile date+amount match).
+- **`v_customer_summary`** / **`v_supplier_summary`** — one row per party for the list pages
+  (`outstanding` / `balance_owed` = opening + debits − credits, plus last_*_date columns).
+  The OLD `v_customer_ledger`/`v_vendor_ledger` summary shapes are GONE — `reports/customers` &
+  `reports/suppliers` now read the `_summary` views.
+- Detail pages: `/customers/[id]`, `/suppliers/[id]` (ledger + Record Payment). Statement:
+  `/customers/[id]/statement` (date-range, printable; carries a brought-forward opening balance).
+- Aging: `src/lib/aging.ts` (`agingBucket`) + `src/components/aging-badge.tsx` (`<AgingBadge date|daysOverdue>`),
+  wired into the customer list Outstanding column. Receivables-oriented (Current / 31–60 / 60+),
+  so it's on customers only, not suppliers.
+
+### WhatsApp invoice sharing (shares the invoice IMAGE, zero backend cost)
+- **Decision:** share the invoice as a PNG file, NOT a link. `wa.me` links can't attach files, so
+  the button renders the on-page invoice to a PNG **client-side** and hands the file to WhatsApp via
+  the native share sheet (`navigator.share({ files })`). Zero backend (no server render / no API).
+  Tradeoff: a file attachment can't pre-select the customer's number — the sender picks the WhatsApp
+  contact in the share sheet.
+- `src/components/share-whatsapp-button.tsx` ("use client"): `domToPng(document.getElementById("invoice-capture"), { scale: 2, backgroundColor: "#fff" })`
+  → `File` → `navigator.share({ files:[file], text: caption })`. Desktop / no file-share → downloads
+  the PNG with a "open WhatsApp and attach it" notice. Caption (no link) = `invoiceCaption()` in
+  `src/lib/invoice-share.ts`.
+- **Use `modern-screenshot` (`domToPng`), NOT `html-to-image`.** html-to-image's `toPng` HANGS
+  silently on this app (foreignObject/font embedding never resolves, even with `skipFonts:true`).
+  modern-screenshot renders the same node in ~600ms. This is the only new runtime dependency here.
+- The invoice page passes `id="invoice-capture"` to `<InvoiceDocument>` (it has an optional `id` prop)
+  so the button captures the tight max-w-2xl invoice box, not the full-width wrapper.
+- `src/components/invoice-document.tsx` — shared presentational invoice (emerald branding, leaf
+  monogram, Total Due bar, print-safe `[print-color-adjust:exact]`). Keep `InvoiceDocumentProps`
+  required-field shape stable — used by the authed invoice page AND the public `/i/[token]` page.
+- **Still present but NO LONGER used by the share button:** `PelletSale.shareToken`,
+  `getOrCreateShareToken()` (invoice actions.ts), the public no-auth route `/i/[token]`
+  (`src/app/(public)/i/[token]/page.tsx`, allowed via `startsWith("/i/")` in the `authorized`
+  callback), `toWhatsappNumber()` (phone.ts), `buildWhatsappUrl()`/`invoiceShareMessage()`. Retained
+  as the **future upgrade path**: automated WhatsApp Business API (Twilio/Meta) sends need a hosted
+  invoice URL + a real phone number, which these already provide.

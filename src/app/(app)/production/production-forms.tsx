@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { upsertProductionDay, type ActionState } from "./actions";
-import { toDateInputValue } from "@/lib/format";
+import { SearchableSelect } from "@/components/searchable-select";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -29,6 +29,13 @@ type ProductionDayRow = {
   notes: string | null;
 };
 
+const SHIFT_OPTIONS = [
+  { value: "DAY", label: "Day Shift" },
+  { value: "NIGHT", label: "Night Shift" },
+];
+
+// One entry per shift: pick Day or Night, enter the bags for that shift.
+// Saving only touches the selected shift's column for that date.
 export function ProductionForm({
   existing,
   defaultDate,
@@ -40,11 +47,25 @@ export function ProductionForm({
     upsertProductionDay,
     {}
   );
+  const [shift, setShift] = useState<"DAY" | "NIGHT">("DAY");
+  const [bags, setBags] = useState(
+    existing ? String(existing.dayShiftBags) : ""
+  );
+
+  const onShiftChange = (v: string) => {
+    const s = v === "NIGHT" ? "NIGHT" : "DAY";
+    setShift(s);
+    if (existing) {
+      setBags(
+        String(s === "DAY" ? existing.dayShiftBags : existing.nightShiftBags)
+      );
+    }
+  };
 
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
       {existing && <input type="hidden" name="id" value={existing.id} />}
-      <div className="sm:col-span-2">
+      <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
@@ -58,29 +79,30 @@ export function ProductionForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Day Shift Bags
+          Shift
         </label>
-        <input
-          name="dayShiftBags"
-          type="number"
-          step="0.5"
-          min="0"
-          placeholder="0"
-          defaultValue={existing?.dayShiftBags ?? ""}
-          className={input}
+        <SearchableSelect
+          name="shift"
+          required
+          placeholder="Select shift…"
+          value={shift}
+          onChange={onShiftChange}
+          options={SHIFT_OPTIONS}
         />
       </div>
-      <div>
+      <div className="sm:col-span-2">
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Night Shift Bags
+          Bags Produced
         </label>
         <input
-          name="nightShiftBags"
+          name="bags"
           type="number"
           step="0.5"
           min="0"
           placeholder="0"
-          defaultValue={existing?.nightShiftBags ?? ""}
+          required
+          value={bags}
+          onChange={(e) => setBags(e.target.value)}
           className={input}
         />
       </div>

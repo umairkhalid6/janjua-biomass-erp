@@ -7,36 +7,36 @@ import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string; id?: string };
 
-export async function createCustomer(
+export async function createSupplier(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   await requireUser();
 
   const name = String(formData.get("name") ?? "").trim();
-  const company = String(formData.get("company") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
   const openingBalanceStr = String(formData.get("openingBalance") ?? "0").trim();
 
-  if (!name) return { error: "Customer name is required." };
+  if (!name) return { error: "Supplier name is required." };
 
   const openingBalance = Number(openingBalanceStr) || 0;
 
-  const created = await prisma.customer.create({
+  const created = await prisma.supplier.create({
     data: {
       name,
-      company: company || null,
       phone: phone || null,
+      notes: notes || null,
       openingBalance,
     },
   });
 
-  revalidatePath("/customers");
-  revalidatePath("/sales");
-  return { ok: `Customer "${name}" created.`, id: created.id };
+  revalidatePath("/suppliers");
+  revalidatePath("/purchases");
+  return { ok: `Supplier "${name}" created.`, id: created.id };
 }
 
-export async function updateCustomer(
+export async function updateSupplier(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
@@ -44,44 +44,44 @@ export async function updateCustomer(
 
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
-  const company = String(formData.get("company") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
   const openingBalanceStr = String(formData.get("openingBalance") ?? "0").trim();
 
-  if (!id) return { error: "Customer ID missing." };
-  if (!name) return { error: "Customer name is required." };
+  if (!id) return { error: "Supplier ID missing." };
+  if (!name) return { error: "Supplier name is required." };
 
   const openingBalance = Number(openingBalanceStr) || 0;
 
-  await prisma.customer.update({
+  await prisma.supplier.update({
     where: { id },
     data: {
       name,
-      company: company || null,
       phone: phone || null,
+      notes: notes || null,
       openingBalance,
     },
   });
 
-  revalidatePath("/customers");
-  revalidatePath(`/customers/${id}`);
-  revalidatePath("/sales");
-  return { ok: "Customer updated." };
+  revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${id}`);
+  revalidatePath("/purchases");
+  return { ok: "Supplier updated." };
 }
 
-export async function createCustomerPayment(
+export async function createSupplierPayment(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   await requireUser();
 
-  const customerId = String(formData.get("customerId") ?? "").trim();
+  const supplierId = String(formData.get("supplierId") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();
   const amountStr = String(formData.get("amount") ?? "").trim();
   const method = String(formData.get("method") ?? "Cash").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
-  if (!customerId) return { error: "Customer ID missing." };
+  if (!supplierId) return { error: "Supplier ID missing." };
   if (!dateStr) return { error: "Date is required." };
   if (!amountStr) return { error: "Amount is required." };
 
@@ -91,9 +91,9 @@ export async function createCustomerPayment(
 
   const date = parseDateInput(dateStr);
 
-  await prisma.customerPayment.create({
+  await prisma.supplierPayment.create({
     data: {
-      customerId,
+      supplierId,
       date,
       amount,
       method: method || "Cash",
@@ -101,25 +101,25 @@ export async function createCustomerPayment(
     },
   });
 
-  revalidatePath(`/customers/${customerId}`);
-  revalidatePath("/customers");
-  revalidatePath("/reports/customers");
+  revalidatePath(`/suppliers/${supplierId}`);
+  revalidatePath("/suppliers");
+  revalidatePath("/reports/suppliers");
   return { ok: "Payment recorded." };
 }
 
-export async function deleteCustomerPayment(
+export async function deleteSupplierPayment(
   formData: FormData
 ): Promise<void> {
   await requireAdmin();
 
   const id = String(formData.get("id") ?? "").trim();
-  const customerId = String(formData.get("customerId") ?? "").trim();
+  const supplierId = String(formData.get("supplierId") ?? "").trim();
 
   if (!id) return;
 
-  await prisma.customerPayment.delete({ where: { id } });
+  await prisma.supplierPayment.delete({ where: { id } });
 
-  revalidatePath(`/customers/${customerId}`);
-  revalidatePath("/customers");
-  revalidatePath("/reports/customers");
+  revalidatePath(`/suppliers/${supplierId}`);
+  revalidatePath("/suppliers");
+  revalidatePath("/reports/suppliers");
 }

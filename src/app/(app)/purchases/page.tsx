@@ -11,6 +11,8 @@ import {
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
 import { MonthPicker } from "@/components/month-picker";
+import { DeleteButton } from "@/components/delete-button";
+import { EditDialog } from "@/components/edit-dialog";
 import { CreatePurchaseForm, EditPurchaseForm } from "./purchase-forms";
 import { deletePurchase } from "./actions";
 import type { MaterialType } from "@prisma/client";
@@ -28,16 +30,16 @@ export default async function PurchasesPage({
   const material = (sp.material as MaterialType | undefined) ?? null;
   const { gte, lte } = monthRange(month);
 
-  const [purchases, vendors] = await Promise.all([
+  const [purchases, suppliers] = await Promise.all([
     prisma.materialPurchase.findMany({
       where: {
         date: { gte, lte },
         ...(material ? { materialType: material } : {}),
       },
-      include: { vendor: true },
+      include: { supplier: true },
       orderBy: { date: "asc" },
     }),
-    prisma.vendor.findMany({ orderBy: { name: "asc" } }),
+    prisma.supplier.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   const rows = purchases.map((p) => {
@@ -45,13 +47,16 @@ export default async function PurchasesPage({
     const handCost = p.handlingCost.toNumber();
     const weightKg = p.weightKg.toNumber();
     const total = matCost + handCost;
-    const ratePerKg = weightKg > 0 ? total / weightKg : 0;
+    // Prefer the stored rate; fall back to computing for legacy rows.
+    const storedRate = p.ratePerKg.toNumber();
+    const ratePerKg =
+      storedRate > 0 ? storedRate : weightKg > 0 ? total / weightKg : 0;
     return {
       id: p.id,
       date: toDateInputValue(p.date),
       materialType: p.materialType,
-      vendorId: p.vendorId,
-      vendorName: p.vendor.name,
+      supplierId: p.supplierId,
+      supplierName: p.supplier.name,
       weightKg,
       materialCost: matCost,
       handlingCost: handCost,
@@ -67,7 +72,7 @@ export default async function PurchasesPage({
   const totalAll = rows.reduce((s, r) => s + r.total, 0);
   const avgRate = totalKg > 0 ? totalAll / totalKg : 0;
 
-  const vendorOptions = vendors.map((v) => ({ id: v.id, name: v.name }));
+  const supplierOptions = suppliers.map((v) => ({ id: v.id, name: v.name }));
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -97,7 +102,7 @@ export default async function PurchasesPage({
         <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
           Record Purchase
         </h2>
-        <CreatePurchaseForm vendors={vendorOptions} />
+        <CreatePurchaseForm suppliers={supplierOptions} />
       </section>
 
       {/* Table */}
@@ -108,7 +113,7 @@ export default async function PurchasesPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Material</th>
-                <th className="px-4 py-3 font-medium">Vendor</th>
+                <th className="px-4 py-3 font-medium">Supplier</th>
                 <th className="px-4 py-3 font-medium text-right">Weight (kg)</th>
                 <th className="px-4 py-3 font-medium text-right">Mat. Cost</th>
                 <th className="px-4 py-3 font-medium text-right">Handling</th>
@@ -141,7 +146,7 @@ export default async function PurchasesPage({
                     {MATERIAL_LABELS[row.materialType]}
                   </td>
                   <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
-                    {row.vendorName}
+                    {row.supplierName}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {row.weightKg.toFixed(2)}
@@ -160,37 +165,24 @@ export default async function PurchasesPage({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <details className="relative">
-                        <summary className="list-none cursor-pointer rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800">
-                          Edit
-                        </summary>
-                        <div className="absolute right-0 top-8 z-10 w-96 rounded-xl border border-neutral-200 bg-white p-4 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-                          <EditPurchaseForm
-                            existing={{
-                              id: row.id,
-                              date: row.date,
-                              materialType: row.materialType,
-                              vendorId: row.vendorId,
-                              weightKg: row.weightKg,
-                              materialCost: row.materialCost,
-                              handlingCost: row.handlingCost,
-                              notes: row.notes,
-                            }}
-                            vendors={vendorOptions}
-                          />
-                        </div>
-                      </details>
+                      <EditDialog title="Edit Purchase">
+                        <EditPurchaseForm
+                          existing={{
+                            id: row.id,
+                            date: row.date,
+                            materialType: row.materialType,
+                            supplierId: row.supplierId,
+                            weightKg: row.weightKg,
+                            materialCost: row.materialCost,
+                            handlingCost: row.handlingCost,
+                            notes: row.notes,
+                          }}
+                          suppliers={supplierOptions}
+                        />
+                      </EditDialog>
                       <form action={deletePurchase}>
                         <input type="hidden" name="id" value={row.id} />
-                        <button
-                          type="submit"
-                          className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-                          onClick={(e) => {
-                            if (!confirm("Delete this purchase?")) e.preventDefault();
-                          }}
-                        >
-                          Delete
-                        </button>
+                        <DeleteButton confirmMessage="Delete this purchase?" />
                       </form>
                     </div>
                   </td>

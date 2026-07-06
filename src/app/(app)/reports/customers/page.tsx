@@ -8,7 +8,7 @@ type CustomerRow = {
   company: string | null;
   sales_count: string | number;
   total_bags: string | number;
-  total_amount: string | number;
+  total_sales: string | number;
   last_sale_date: Date | null;
 };
 
@@ -16,7 +16,7 @@ export default async function CustomersReportPage() {
   await requireAdmin();
 
   const ledger = await prisma.$queryRaw<CustomerRow[]>`
-    SELECT * FROM v_customer_ledger ORDER BY total_amount DESC, name ASC
+    SELECT * FROM v_customer_summary ORDER BY total_sales DESC, name ASC
   `;
 
   const rows = ledger.map((r) => ({
@@ -25,7 +25,7 @@ export default async function CustomersReportPage() {
     company: r.company,
     salesCount: Number(r.sales_count),
     totalBags: Number(r.total_bags),
-    totalAmount: Number(r.total_amount),
+    totalAmount: Number(r.total_sales),
     lastSale: r.last_sale_date ? new Date(r.last_sale_date) : null,
   }));
 

@@ -3,62 +3,51 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-helpers";
 import { formatPKR } from "@/lib/format";
 import { EditDialog } from "@/components/edit-dialog";
-import { AgingBadge } from "@/components/aging-badge";
-import { CreateCustomerForm, EditCustomerForm } from "./customer-forms";
+import { CreateSupplierForm, EditSupplierForm } from "./supplier-forms";
 
-type CustomerSummaryRow = {
-  customer_id: string;
+type SupplierSummaryRow = {
+  supplier_id: string;
   name: string;
-  company: string | null;
   phone: string | null;
   opening_balance: string | number;
-  total_sales: string | number;
-  sales_count: string | number;
-  total_bags: string | number;
-  last_sale_date: Date | null;
+  total_purchased: string | number;
+  last_purchase_date: Date | null;
   total_paid: string | number;
   last_payment_date: Date | null;
-  outstanding: string | number;
+  balance_owed: string | number;
 };
 
-export default async function CustomersPage() {
+export default async function SuppliersPage() {
   await requireUser();
 
-  const [summaryRows, customers] = await Promise.all([
-    prisma.$queryRaw<CustomerSummaryRow[]>`
-      SELECT * FROM v_customer_summary ORDER BY name ASC
+  const [summaryRows, suppliers] = await Promise.all([
+    prisma.$queryRaw<SupplierSummaryRow[]>`
+      SELECT * FROM v_supplier_summary ORDER BY name ASC
     `,
-    prisma.customer.findMany({ orderBy: { name: "asc" } }),
+    prisma.supplier.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  // Build a lookup for outstanding + last activity (payment, else sale) from
-  // the summary view, keyed by customer id.
+  // Build a lookup from summary for balance figures
   const summaryById = new Map(
-    summaryRows.map((r) => [
-      r.customer_id,
-      {
-        outstanding: Number(r.outstanding),
-        lastActivity: r.last_payment_date ?? r.last_sale_date ?? null,
-      },
-    ])
+    summaryRows.map((r) => [r.supplier_id, Number(r.balance_owed)])
   );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
-          Customers
+          Suppliers
         </h1>
         <p className="mt-0.5 text-sm text-neutral-500">
-          Manage customer records.
+          Manage supplier records.
         </p>
       </div>
 
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Add Customer
+          Add Supplier
         </h2>
-        <CreateCustomerForm />
+        <CreateSupplierForm />
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
@@ -67,66 +56,58 @@ export default async function CustomersPage() {
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Company</th>
                 <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 text-right font-medium">Outstanding</th>
+                <th className="px-4 py-3 text-right font-medium">Balance Owed</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {customers.length === 0 && (
+              {suppliers.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={4}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
-                    No customers yet.
+                    No suppliers yet.
                   </td>
                 </tr>
               )}
-              {customers.map((c) => {
-                const summary = summaryById.get(c.id);
-                const outstanding = summary?.outstanding ?? 0;
+              {suppliers.map((v) => {
+                const balanceOwed = summaryById.get(v.id) ?? 0;
                 return (
                   <tr
-                    key={c.id}
+                    key={v.id}
                     className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
                   >
                     <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-50">
                       <Link
-                        href={`/customers/${c.id}`}
+                        href={`/suppliers/${v.id}`}
                         className="hover:underline text-green-700 dark:text-green-400"
                       >
-                        {c.name}
+                        {v.name}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
-                      {c.company ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
-                      {c.phone ?? "—"}
+                      {v.phone ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {outstanding > 0 ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="font-semibold text-amber-700 dark:text-amber-400">
-                            {formatPKR(outstanding)}
-                          </span>
-                          <AgingBadge date={summary?.lastActivity ?? null} />
-                        </div>
+                      {balanceOwed > 0 ? (
+                        <span className="font-semibold text-amber-700 dark:text-amber-400">
+                          {formatPKR(balanceOwed)}
+                        </span>
                       ) : (
-                        <span className="text-neutral-400">{formatPKR(outstanding)}</span>
+                        <span className="text-neutral-400">{formatPKR(balanceOwed)}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <EditDialog title="Edit Customer">
-                        <EditCustomerForm
+                      <EditDialog title="Edit Supplier">
+                        <EditSupplierForm
                           existing={{
-                            id: c.id,
-                            name: c.name,
-                            company: c.company,
-                            phone: c.phone,
-                            openingBalance: c.openingBalance.toNumber(),
+                            id: v.id,
+                            name: v.name,
+                            phone: v.phone,
+                            notes: v.notes,
+                            openingBalance: v.openingBalance.toNumber(),
                           }}
                         />
                       </EditDialog>
