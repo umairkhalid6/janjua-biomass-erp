@@ -32,6 +32,16 @@ contributors can find solutions quickly.
 **Cause:** Prisma 7 moved seed configuration to `prisma.config.ts` under `migrations.seed`.
 **Fix:** Added `seed: "npx tsx prisma/seed.ts"` there. Also added `import "dotenv/config"` to `seed.ts` — tsx does not auto-load `.env`, so `pg` fell back to the OS username as database name (`Database "umairkhalid" does not exist`).
 
+## 2026-07-06 — Auth.js v5 middleware "must export a function"
+**Error:** `The file "./src/middleware.ts" must export a function, either as a default export or as a named "middleware" export.` (Next 16 build), plus a deprecation warning steering to a `proxy` file.
+**Cause:** Next 16 renamed the middleware convention to `proxy` and no longer recognizes the `export const { auth } = NextAuth(...)` destructuring as a function export.
+**Fix:** Kept `src/middleware.ts` but assigned `const { auth } = NextAuth(authConfig)` then `export default auth;` (a real default function export). Build passes; the deprecation warning is cosmetic. If Next drops the `middleware` name later, rename the file to `src/proxy.ts` and switch to `export function proxy`.
+
+## 2026-07-06 — Session callback: "Type 'unknown' is not assignable to type 'string'"
+**Error:** Type error on `session.user.id = token.id` in `src/auth.config.ts`.
+**Cause:** The `next-auth/jwt` module augmentation for `JWT.id`/`JWT.role` wasn't reliably applied inside the edge config, so `token.id` stayed `unknown`.
+**Fix:** Cast at the assignment (`token.id as string`, `token.role as Role`). Augmentation still lives in `src/types/next-auth.d.ts` for session typing everywhere else.
+
 ## Sheet bugs fixed structurally in the new schema (documented for the record)
 The old Google Sheets workbook had these calculation errors, which the SQL views fix by construction:
 1. `Main!N16` (Total Monthly Cost) added chip **weight (KG)** instead of chip **cost (PKR)** and omitted the actual chip cost.

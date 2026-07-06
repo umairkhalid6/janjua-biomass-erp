@@ -64,4 +64,33 @@ Update it as significant decisions are made.
   Postgres on this machine). Inside compose it's still `postgres:5432`.
 - Seed: admin user from ADMIN_EMAIL/ADMIN_PASSWORD env, contractor rate 6 PKR/kg, opening
   balance adjustments totalling 504,730 PKR owed to the Thekadar (verified against the sheet).
-- Auth: not yet configured — the auth agent installs Auth.js v5 (credentials + ADMIN/OPERATOR).
+- Auth: **DONE** — Auth.js v5 (`next-auth@5.0.0-beta.31`), Credentials provider, JWT sessions
+  (no DB session table). Split-config pattern for edge middleware:
+  - `src/auth.config.ts` — edge-safe (NO Prisma/bcrypt). Holds `pages`, `session.strategy`,
+    the `jwt`/`session` callbacks (put id + role on token/session), and the `authorized`
+    callback that middleware uses for gating. Cast `token.id as string`, `token.role as Role`.
+  - `src/auth.ts` — full Node config: spreads `authConfig` and adds the Credentials provider
+    whose `authorize()` does the Prisma lookup + bcrypt compare (rejects inactive users).
+    Exports `handlers`, `auth`, `signIn`, `signOut`.
+  - `src/middleware.ts` — `const { auth } = NextAuth(authConfig); export default auth;`
+    (NOT destructured-const export — Next 16 rejects that; see ERRORS.md). Matcher excludes
+    `/api/auth`, `_next`, static assets. `/login` is public (handled in `authorized`).
+  - `src/app/api/auth/[...nextauth]/route.ts` — re-exports `handlers` GET/POST.
+  - `src/types/next-auth.d.ts` — augments `session.user` with `id` + `role`.
+- **RBAC helpers** in `src/lib/auth-helpers.ts`: `requireUser()` / `requireAdmin()`. Both are
+  async, read the JWT session, and `redirect()` on failure (never return null). Call at the top
+  of EVERY server action and protected RSC, e.g.
+  `export async function createSale(...) { const user = await requireUser(); ... }`
+  or `await requireAdmin()` for admin-only mutations. Middleware gates *routes*; these gate
+  *server actions* (which middleware does not see).
+- **Route gating:** ADMIN-only prefixes = `/reports`, `/settings`, `/users` (in
+  `ADMIN_PREFIXES` in auth.config.ts). OPERATORs hitting those are redirected to `/production`.
+  Unauthenticated → `/login?callbackUrl=...`. To add a new admin-only area, add its prefix there
+  AND set `adminOnly: true` on its nav item.
+- **App shell / nav:** authenticated pages live under the `(app)` route group
+  (`src/app/(app)/`), wrapped by `src/app/(app)/layout.tsx` (renders `AppShell`). `/login` is
+  OUTSIDE the group. Nav config = `src/components/nav-items.ts` (`NAV_ITEMS` + `visibleNavItems`);
+  shell = `src/components/app-shell.tsx` (sidebar ≥768px, hamburger drawer on mobile). Add new
+  pages as `src/app/(app)/<route>/page.tsx` and an entry in nav-items.ts.
+- **User management:** `/users` (ADMIN only) — create/toggle-active/reset-password via plain
+  server actions in `src/app/(app)/users/actions.ts`. Admins can't deactivate themselves.
