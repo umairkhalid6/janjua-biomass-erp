@@ -28,6 +28,10 @@ export default async function ProductionPage({
   const rows = await prisma.productionDay.findMany({
     where: { date: { gte, lte } },
     orderBy: { date: "asc" },
+    include: {
+      createdBy: { select: { name: true } },
+      updatedBy: { select: { name: true } },
+    },
   });
 
   // Serialize Decimals to numbers
@@ -37,6 +41,8 @@ export default async function ProductionPage({
     dayShiftBags: r.dayShiftBags.toNumber(),
     nightShiftBags: r.nightShiftBags.toNumber(),
     notes: r.notes,
+    createdByName: r.createdBy?.name ?? null,
+    updatedByName: r.updatedBy?.name ?? null,
   }));
 
   const totalDay = days.reduce((s, r) => s + r.dayShiftBags, 0);
@@ -78,6 +84,7 @@ export default async function ProductionPage({
                 <th className="px-4 py-3 font-medium text-right">Night Bags</th>
                 <th className="px-4 py-3 font-medium text-right">Total</th>
                 <th className="px-4 py-3 font-medium">Notes</th>
+                <th className="px-4 py-3 font-medium">Entered By</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -85,7 +92,7 @@ export default async function ProductionPage({
               {days.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
                     No entries for {formatMonth(month)}.
@@ -108,6 +115,14 @@ export default async function ProductionPage({
                   </td>
                   <td className="px-4 py-3 text-neutral-500 text-xs">
                     {row.notes ?? ""}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-neutral-500">
+                    {row.createdByName ?? "—"}
+                    {row.updatedByName && (
+                      <span className="block text-neutral-400">
+                        edited by {row.updatedByName}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
@@ -140,7 +155,7 @@ export default async function ProductionPage({
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {totalBags.toFixed(2)} bags
                   </td>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             )}

@@ -299,3 +299,18 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   because `filtered` is a `useMemo` and a ref reset on reopen wouldn't invalidate it). This fixed
   the expense category combobox hiding previously saved categories behind the pre-filled
   "Maintenance" text. Categories themselves were already persisted via `distinct: ["category"]`.
+
+### Autofill styling + production audit fields (2026-07-08)
+- **Autofill white-background fix:** browsers force a pale background on autofilled inputs
+  (`:-webkit-autofill`), turning fields white in dark mode when the user picks a browser
+  suggestion (e.g. the Expense "Item" field). Global override in `globals.css`: 1000px inset
+  box-shadow matching the field bg (#fff light / #0a0a0a dark = the inputs' `dark:bg-neutral-950`)
+  + `-webkit-text-fill-color` + a huge `background-color` transition delay. Covers input/
+  textarea/select everywhere; Firefox via `input:autofill`. Don't style autofill per-component.
+- **ProductionDay audit fields:** `createdById`/`createdBy` + `updatedById`/`updatedBy` (both
+  optional User relations, named `ProductionDayCreatedBy`/`ProductionDayUpdatedBy`) + `updatedAt`.
+  Migration `20260708083303_production_created_updated_by`. `upsertProductionDay` stamps
+  `createdById` on create and `updatedById` on update (upsert = one row per date, so saving the
+  second shift of a day counts as an update). `updatedBy` stays NULL until someone edits after
+  creation; rows from before the migration show "—" in the new "Entered By" column on
+  /production. Operators can still edit any entry (owner's decision) — this is audit, not ACL.

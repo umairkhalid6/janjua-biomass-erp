@@ -11,7 +11,7 @@ export async function upsertProductionDay(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  const user = await requireUser();
 
   const dateStr = String(formData.get("date") ?? "").trim();
   const shift = String(formData.get("shift") ?? "") === "NIGHT" ? "NIGHT" : "DAY";
@@ -38,10 +38,12 @@ export async function upsertProductionDay(
       dayShiftBags: shift === "DAY" ? bags : 0,
       nightShiftBags: shift === "NIGHT" ? bags : 0,
       notes: notes || null,
+      createdById: user.id,
     },
     update: {
       ...shiftField,
       ...(notes ? { notes } : {}),
+      updatedById: user.id,
     },
   });
 
