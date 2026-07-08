@@ -314,3 +314,39 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   second shift of a day counts as an update). `updatedBy` stays NULL until someone edits after
   creation; rows from before the migration show "—" in the new "Entered By" column on
   /production. Operators can still edit any entry (owner's decision) — this is audit, not ACL.
+
+### Opening balance Dr/Cr + ledger row editing (2026-07-08)
+- **Opening balance sign convention (root cause of the "-50,000 became 50,000" report):**
+  `Customer.openingBalance` is stored SIGNED — positive = customer owes us (Dr), negative =
+  advance/credit we owe them (Cr). Typing -50,000 was stored correctly but posted to the CREDIT
+  column ("Rs 50,000.00 Cr"), the opposite of the outstanding the user meant. The customer form
+  now submits an unsigned amount + an explicit `openingBalanceType` select (DR "Customer owes us —
+  outstanding" / CR "Customer paid in advance — credit"); `parseOpeningBalance()` in
+  customers/actions.ts applies the sign (`Math.abs` + direction), so a typed minus sign can never
+  flip the meaning. An outstanding balance is entered as a POSITIVE amount with type DR.
+- **Ledger row editing (admin):** every row on /customers/[id] now has Edit — OPENING opens the
+  customer form, SALE opens EditSaleForm (prefilled with GROSS rate = ratePerBag +
+  loadingChargePerBag; server re-splits), PAYMENT opens the new EditCustomerPaymentForm backed by
+  `updateCustomerPayment` (payments were previously delete-only). `updateSale` now revalidates
+  /customers and both old+new customer detail pages since sales can be edited from the ledger.
+- Credit balances render as "Rs X Cr" (green) on the customers list Outstanding column and the
+  detail-page Outstanding card ("Customer advance (we owe)") instead of a raw negative number.
+
+### Rs 10/bag loading charge split (2026-07-08)
+- **Every sale carries a fixed Rs 10/bag loading charge inside the price the user types.** The
+  form still asks for ONE customer-facing rate (e.g. 2,500); `splitRate()` in sales/actions.ts
+  stores `ratePerBag` = entered − 10 (net pellet price, 2,490) + new `loadingChargePerBag` = 10
+  (constant `LOADING_CHARGE_PER_BAG` in constants.ts). Validation rejects rates ≤ 10.
+- **Gross vs net rule:** anything the customer sees or owes uses GROSS (net + loading) — invoice
+  pages, v_customer_ledger debits, v_customer_summary.total_sales/outstanding. Reports split it:
+  sales table + /reports/customers show a Loading column; v_monthly_summary.sales_revenue is now
+  NET with a separate `loading_charges` column shown on P&L as "pass-through, not in profit"
+  (the Rs 10 is collected for the loaders, it is not pellet revenue).
+- **Edit forms round-trip on gross:** EditSaleForm is prefilled with net + loading and the server
+  re-splits on save, so editing without touching the rate is a no-op.
+- Migration `20260708091300_loading_charge_split` adds the column, backfills existing sales
+  (rate − 10 / charge 10 where rate > 10 — gross totals & balances unchanged), and rebuilds
+  v_customer_ledger / v_customer_summary (+ total_loading) / v_monthly_summary (+ loading_charges).
+  Gotcha: an already-running `next dev` keeps the OLD generated Prisma client in memory after
+  `prisma generate` — pages 500 with "Cannot read properties of undefined (reading 'toNumber')"
+  until the dev server is restarted.

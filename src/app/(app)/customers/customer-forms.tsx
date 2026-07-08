@@ -6,6 +6,7 @@ import {
   createCustomer,
   updateCustomer,
   createCustomerPayment,
+  updateCustomerPayment,
   type ActionState,
 } from "./actions";
 
@@ -64,10 +65,24 @@ function CustomerFields({ existing }: { existing?: CustomerRow }) {
           name="openingBalance"
           type="number"
           step="0.01"
-          defaultValue={existing?.openingBalance ?? 0}
+          min="0"
+          defaultValue={Math.abs(existing?.openingBalance ?? 0)}
           placeholder="0.00"
           className={input}
         />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Opening Balance Type
+        </label>
+        <select
+          name="openingBalanceType"
+          defaultValue={(existing?.openingBalance ?? 0) < 0 ? "CR" : "DR"}
+          className={input}
+        >
+          <option value="DR">Customer owes us — outstanding (Dr)</option>
+          <option value="CR">Customer paid in advance — credit (Cr)</option>
+        </select>
       </div>
     </>
   );
@@ -173,6 +188,87 @@ export function CustomerPaymentForm({ customerId }: { customerId: string }) {
       </div>
       <div className="sm:col-span-2 flex items-center gap-3">
         <Submit label="Record Payment" />
+        {state.error && (
+          <span className="text-sm text-red-600">{state.error}</span>
+        )}
+        {state.ok && (
+          <span className="text-sm text-green-700">{state.ok}</span>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export type PaymentRow = {
+  id: string;
+  customerId: string;
+  date: string;
+  amount: number;
+  method: string;
+  notes: string | null;
+};
+
+export function EditCustomerPaymentForm({ existing }: { existing: PaymentRow }) {
+  const [state, action] = useActionState<ActionState, FormData>(
+    updateCustomerPayment,
+    {}
+  );
+  return (
+    <form action={action} className="grid gap-3 sm:grid-cols-2">
+      <input type="hidden" name="id" value={existing.id} />
+      <input type="hidden" name="customerId" value={existing.customerId} />
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Date
+        </label>
+        <input
+          name="date"
+          type="date"
+          required
+          defaultValue={existing.date}
+          className={input}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Amount (PKR)
+        </label>
+        <input
+          name="amount"
+          type="number"
+          step="0.01"
+          min="0.01"
+          required
+          defaultValue={existing.amount}
+          className={input}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Method
+        </label>
+        <select name="method" defaultValue={existing.method} className={input}>
+          {METHODS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Notes (optional)
+        </label>
+        <input
+          name="notes"
+          type="text"
+          placeholder="Any notes…"
+          defaultValue={existing.notes ?? ""}
+          className={input}
+        />
+      </div>
+      <div className="sm:col-span-2 flex items-center gap-3">
+        <Submit label="Update Payment" />
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>
         )}

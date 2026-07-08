@@ -23,7 +23,10 @@ export default async function InvoicePage({
   if (!sale) notFound();
 
   const quantityBags = sale.quantityBags.toNumber();
-  const ratePerBag = sale.ratePerBag.toNumber();
+  // The invoice bills the customer-facing rate: pellet price + loading charge
+  // (the split is an internal bookkeeping detail, not shown to the customer).
+  const ratePerBag =
+    sale.ratePerBag.toNumber() + sale.loadingChargePerBag.toNumber();
   const amount = quantityBags * ratePerBag;
   const invoiceLabel = `INV-${String(sale.invoiceNo).padStart(5, "0")}`;
 

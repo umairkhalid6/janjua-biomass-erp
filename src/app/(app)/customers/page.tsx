@@ -114,6 +114,10 @@ export default async function CustomersPage() {
                           </span>
                           <AgingBadge date={summary?.lastActivity ?? null} />
                         </div>
+                      ) : outstanding < 0 ? (
+                        <span className="font-semibold text-green-700 dark:text-green-400">
+                          {formatPKR(Math.abs(outstanding))} Cr
+                        </span>
                       ) : (
                         <span className="text-neutral-400">{formatPKR(outstanding)}</span>
                       )}

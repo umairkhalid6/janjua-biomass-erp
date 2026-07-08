@@ -42,19 +42,27 @@ export default async function SalesPage({
     prisma.customer.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  const rows = sales.map((s) => ({
-    id: s.id,
-    invoiceNo: s.invoiceNo,
-    date: toDateInputValue(s.date),
-    customerId: s.customerId,
-    customerName: s.customer.name,
-    customerCompany: s.customer.company,
-    customerPhone: s.customer.phone,
-    quantityBags: s.quantityBags.toNumber(),
-    ratePerBag: s.ratePerBag.toNumber(),
-    amount: s.quantityBags.toNumber() * s.ratePerBag.toNumber(),
-    notes: s.notes,
-  }));
+  const rows = sales.map((s) => {
+    const quantityBags = s.quantityBags.toNumber();
+    const ratePerBag = s.ratePerBag.toNumber(); // net pellet price
+    const loadingChargePerBag = s.loadingChargePerBag.toNumber();
+    return {
+      id: s.id,
+      invoiceNo: s.invoiceNo,
+      date: toDateInputValue(s.date),
+      customerId: s.customerId,
+      customerName: s.customer.name,
+      customerCompany: s.customer.company,
+      customerPhone: s.customer.phone,
+      quantityBags,
+      ratePerBag,
+      grossRatePerBag: ratePerBag + loadingChargePerBag,
+      loadingAmount: quantityBags * loadingChargePerBag,
+      // Invoice total: pellets + loading (what the customer owes).
+      amount: quantityBags * (ratePerBag + loadingChargePerBag),
+      notes: s.notes,
+    };
+  });
 
   const customerOptions = customers.map((c) => ({
     id: c.id,
@@ -63,6 +71,7 @@ export default async function SalesPage({
   }));
 
   const totalBags = rows.reduce((s, r) => s + r.quantityBags, 0);
+  const totalLoading = rows.reduce((s, r) => s + r.loadingAmount, 0);
   const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
 
   return (
@@ -103,6 +112,7 @@ export default async function SalesPage({
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium text-right">Bags</th>
                 <th className="px-4 py-3 font-medium text-right">Rate/bag</th>
+                <th className="px-4 py-3 font-medium text-right">Loading</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
@@ -111,7 +121,7 @@ export default async function SalesPage({
               {rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
                     No sales for {formatMonth(month)}.
@@ -148,6 +158,9 @@ export default async function SalesPage({
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {formatPKR(row.ratePerBag)}
                   </td>
+                  <td className="px-4 py-3 text-right text-neutral-500 dark:text-neutral-400">
+                    {formatPKR(row.loadingAmount)}
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold text-neutral-900 dark:text-neutral-50">
                     {formatPKR(row.amount)}
                   </td>
@@ -160,7 +173,7 @@ export default async function SalesPage({
                             date: row.date,
                             customerId: row.customerId,
                             quantityBags: row.quantityBags,
-                            ratePerBag: row.ratePerBag,
+                            ratePerBag: row.grossRatePerBag,
                             notes: row.notes,
                           }}
                           customers={customerOptions}
@@ -187,6 +200,9 @@ export default async function SalesPage({
                     {totalBags.toFixed(2)} bags
                   </td>
                   <td />
+                  <td className="px-4 py-3 text-right text-neutral-600 dark:text-neutral-400">
+                    {formatPKR(totalLoading)}
+                  </td>
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {formatPKR(totalAmount)}
                   </td>

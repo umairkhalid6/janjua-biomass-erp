@@ -9,6 +9,7 @@ type CustomerRow = {
   sales_count: string | number;
   total_bags: string | number;
   total_sales: string | number;
+  total_loading: string | number;
   last_sale_date: Date | null;
 };
 
@@ -25,11 +26,14 @@ export default async function CustomersReportPage() {
     company: r.company,
     salesCount: Number(r.sales_count),
     totalBags: Number(r.total_bags),
+    // Gross (invoiced) total; the loading share within it is shown separately.
     totalAmount: Number(r.total_sales),
+    totalLoading: Number(r.total_loading),
     lastSale: r.last_sale_date ? new Date(r.last_sale_date) : null,
   }));
 
   const grandTotal = rows.reduce((s, r) => s + r.totalAmount, 0);
+  const grandLoading = rows.reduce((s, r) => s + r.totalLoading, 0);
   const grandBags = rows.reduce((s, r) => s + r.totalBags, 0);
 
   return (
@@ -47,6 +51,7 @@ export default async function CustomersReportPage() {
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 text-right font-medium">Sales</th>
                 <th className="px-4 py-3 text-right font-medium">Bags</th>
+                <th className="px-4 py-3 text-right font-medium">Loading</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
                 <th className="px-4 py-3 font-medium">Last Sale</th>
               </tr>
@@ -54,7 +59,7 @@ export default async function CustomersReportPage() {
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-neutral-400">
+                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-400">
                     No customers yet.
                   </td>
                 </tr>
@@ -70,6 +75,9 @@ export default async function CustomersReportPage() {
                   <td className="px-4 py-2.5 text-right text-neutral-500">{r.salesCount.toLocaleString()}</td>
                   <td className="px-4 py-2.5 text-right text-neutral-700 dark:text-neutral-300">
                     {r.totalBags.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-neutral-500 dark:text-neutral-400">
+                    {formatPKR(r.totalLoading)}
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold text-neutral-900 dark:text-neutral-50">
                     {formatPKR(r.totalAmount)}
@@ -87,6 +95,9 @@ export default async function CustomersReportPage() {
                   <td />
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {grandBags.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right text-neutral-600 dark:text-neutral-400">
+                    {formatPKR(grandLoading)}
                   </td>
                   <td className="px-4 py-3 text-right text-blue-700 dark:text-blue-400">
                     {formatPKR(grandTotal)}

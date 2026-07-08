@@ -4,8 +4,20 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
+import { LOADING_CHARGE_PER_BAG } from "@/lib/constants";
 
 export type ActionState = { error?: string; ok?: string };
+
+// The form asks for the customer-facing price per bag (e.g. 2,500), which
+// includes the fixed loading charge. Split it before saving so reports can
+// track pellet revenue (2,490) and loading charges (10) separately, while
+// invoices still bill the full entered price.
+function splitRate(enteredRate: number) {
+  return {
+    ratePerBag: enteredRate - LOADING_CHARGE_PER_BAG,
+    loadingChargePerBag: LOADING_CHARGE_PER_BAG,
+  };
+}
 
 export async function createSale(
   _prev: ActionState,
@@ -24,12 +36,14 @@ export async function createSale(
   if (!quantityStr || !rateStr) return { error: "Quantity and rate are required." };
 
   const quantityBags = parseFloat(quantityStr);
-  const ratePerBag = parseFloat(rateStr);
+  const enteredRate = parseFloat(rateStr);
 
   if (isNaN(quantityBags) || quantityBags <= 0)
     return { error: "Quantity must be a positive number." };
-  if (isNaN(ratePerBag) || ratePerBag <= 0)
-    return { error: "Rate must be a positive number." };
+  if (isNaN(enteredRate) || enteredRate <= LOADING_CHARGE_PER_BAG)
+    return {
+      error: `Rate must be above the Rs ${LOADING_CHARGE_PER_BAG}/bag loading charge.`,
+    };
 
   const date = parseDateInput(dateStr);
 
@@ -38,7 +52,7 @@ export async function createSale(
       date,
       customerId,
       quantityBags,
-      ratePerBag,
+      ...splitRate(enteredRate),
       notes: notes || null,
       createdById: user.id,
     },
@@ -68,14 +82,23 @@ export async function updateSale(
   if (!quantityStr || !rateStr) return { error: "Quantity and rate are required." };
 
   const quantityBags = parseFloat(quantityStr);
-  const ratePerBag = parseFloat(rateStr);
+  const enteredRate = parseFloat(rateStr);
 
   if (isNaN(quantityBags) || quantityBags <= 0)
     return { error: "Quantity must be a positive number." };
-  if (isNaN(ratePerBag) || ratePerBag <= 0)
-    return { error: "Rate must be a positive number." };
+  if (isNaN(enteredRate) || enteredRate <= LOADING_CHARGE_PER_BAG)
+    return {
+      error: `Rate must be above the Rs ${LOADING_CHARGE_PER_BAG}/bag loading charge.`,
+    };
 
   const date = parseDateInput(dateStr);
+
+  // The sale may be edited from the customer ledger page; remember the
+  // original customer so their ledger refreshes even if the sale moved.
+  const previous = await prisma.pelletSale.findUnique({
+    where: { id },
+    select: { customerId: true },
+  });
 
   await prisma.pelletSale.update({
     where: { id },
@@ -83,12 +106,17 @@ export async function updateSale(
       date,
       customerId,
       quantityBags,
-      ratePerBag,
+      ...splitRate(enteredRate),
       notes: notes || null,
     },
   });
 
   revalidatePath("/sales");
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  if (previous && previous.customerId !== customerId) {
+    revalidatePath(`/customers/${previous.customerId}`);
+  }
   return { ok: "Sale updated." };
 }
 

@@ -37,7 +37,11 @@ export function SearchableSelect({
 
   const [query, setQuery] = useState(() => labelFor(value));
   const [open, setOpen] = useState(false);
+  // Index into the rendered rows (filtered options, then the "+ Add" row).
+  // -1 means nothing highlighted yet.
+  const [highlight, setHighlight] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
   // True only after the user has typed since the dropdown last opened.
   // Resets to false on each open so clicking in always shows the full list.
@@ -77,6 +81,16 @@ export function SearchableSelect({
     (o) => o.label.trim().toLowerCase() === query.trim().toLowerCase()
   );
 
+  const showAdd = allowCustom && query.trim() !== "" && !exactMatch;
+  const itemCount = filtered.length + (showAdd ? 1 : 0);
+
+  // Keep the highlighted row visible when navigating long lists.
+  useEffect(() => {
+    if (highlight < 0 || !listRef.current) return;
+    const el = listRef.current.children[highlight] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [highlight]);
+
   const setValue = (v: string) => {
     if (controlledValue === undefined) setInternalValue(v);
     onChange?.(v);
@@ -87,12 +101,20 @@ export function SearchableSelect({
     setValue(o.value);
     setQuery(o.label);
     setOpen(false);
+    setHighlight(-1);
+  };
+
+  const pickAdd = () => {
+    setValue(query.trim());
+    setOpen(false);
+    setHighlight(-1);
   };
 
   const handleInput = (text: string) => {
     setTypedSinceOpen(true);
     setQuery(text);
     setOpen(true);
+    setHighlight(text.trim() ? 0 : -1);
     if (allowCustom) {
       const match = options.find(
         (o) => o.label.trim().toLowerCase() === text.trim().toLowerCase()
@@ -119,18 +141,42 @@ export function SearchableSelect({
         placeholder={placeholder}
         autoComplete="off"
         className={inputClass}
-        onFocus={() => { setTypedSinceOpen(false); setOpen(true); }}
-        onClick={() => { setTypedSinceOpen(false); setOpen(true); }}
+        aria-activedescendant={
+          open && highlight >= 0 ? `${listId}-opt-${highlight}` : undefined
+        }
+        onFocus={() => { setTypedSinceOpen(false); setOpen(true); setHighlight(-1); }}
+        onClick={() => { setTypedSinceOpen(false); setOpen(true); setHighlight(-1); }}
         onChange={(e) => handleInput(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") {
+            setOpen(false);
+            setHighlight(-1);
+          }
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!open) {
+              setTypedSinceOpen(false);
+              setOpen(true);
+              setHighlight(0);
+              return;
+            }
+            if (itemCount === 0) return;
+            const delta = e.key === "ArrowDown" ? 1 : -1;
+            setHighlight((h) =>
+              h < 0
+                ? delta > 0
+                  ? 0
+                  : itemCount - 1
+                : (h + delta + itemCount) % itemCount
+            );
+          }
           if (e.key === "Enter" && open) {
             e.preventDefault();
-            if (filtered.length > 0) pick(filtered[0]);
-            else if (allowCustom && query.trim()) {
-              setValue(query.trim());
-              setOpen(false);
-            }
+            if (highlight >= 0 && highlight < itemCount) {
+              if (highlight < filtered.length) pick(filtered[highlight]);
+              else pickAdd();
+            } else if (filtered.length > 0) pick(filtered[0]);
+            else if (allowCustom && query.trim()) pickAdd();
           }
         }}
         onBlur={() => {
@@ -145,18 +191,29 @@ export function SearchableSelect({
       </span>
       {open && (
         <ul
+          ref={listRef}
           id={listId}
+          role="listbox"
           className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         >
-          {filtered.map((o) => (
-            <li key={o.value}>
+          {filtered.map((o, i) => (
+            <li
+              key={o.value}
+              id={`${listId}-opt-${i}`}
+              role="option"
+              aria-selected={o.value === value}
+            >
               <button
                 type="button"
+                tabIndex={-1}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   pick(o);
                 }}
-                className={`block w-full px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                onMouseEnter={() => setHighlight(i)}
+                className={`block w-full px-3 py-2 text-left text-sm ${
+                  i === highlight ? "bg-neutral-100 dark:bg-neutral-800" : ""
+                } ${
                   o.value === value
                     ? "font-semibold text-green-700 dark:text-green-400"
                     : "text-neutral-700 dark:text-neutral-300"
@@ -166,16 +223,21 @@ export function SearchableSelect({
               </button>
             </li>
           ))}
-          {allowCustom && query.trim() && !exactMatch && (
-            <li>
+          {showAdd && (
+            <li id={`${listId}-opt-${filtered.length}`} role="option" aria-selected={false}>
               <button
                 type="button"
+                tabIndex={-1}
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  setValue(query.trim());
-                  setOpen(false);
+                  pickAdd();
                 }}
-                className="block w-full px-3 py-2 text-left text-sm font-medium text-green-700 hover:bg-neutral-100 dark:text-green-400 dark:hover:bg-neutral-800"
+                onMouseEnter={() => setHighlight(filtered.length)}
+                className={`block w-full px-3 py-2 text-left text-sm font-medium text-green-700 dark:text-green-400 ${
+                  highlight === filtered.length
+                    ? "bg-neutral-100 dark:bg-neutral-800"
+                    : ""
+                }`}
               >
                 + Add “{query.trim()}”
               </button>

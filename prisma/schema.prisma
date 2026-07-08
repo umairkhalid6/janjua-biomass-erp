@@ -125,7 +125,11 @@ model PelletSale {
   customerId   String
   customer     Customer @relation(fields: [customerId], references: [id])
   quantityBags Decimal  @db.Decimal(12, 2)
-  ratePerBag   Decimal  @db.Decimal(12, 2)
+  // Net pellet price per bag. The customer-facing (invoice) rate is
+  // ratePerBag + loadingChargePerBag; the split keeps loading income out of
+  // pellet revenue in reports (see LOADING_CHARGE_PER_BAG in constants.ts).
+  ratePerBag         Decimal @db.Decimal(12, 2)
+  loadingChargePerBag Decimal @default(0) @db.Decimal(12, 2)
   notes        String?
   // Unguessable token for the public (no-auth) invoice link shared on WhatsApp.
   // Null until an invoice is first shared; generated lazily.

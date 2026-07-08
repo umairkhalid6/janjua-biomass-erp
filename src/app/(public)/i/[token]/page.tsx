@@ -33,7 +33,11 @@ export default async function PublicInvoicePage({
           phone: sale.customer.phone,
         }}
         quantityBags={sale.quantityBags.toNumber()}
-        ratePerBag={sale.ratePerBag.toNumber()}
+        // Customer-facing rate: pellet price + loading charge (internal split
+        // not shown on the invoice).
+        ratePerBag={
+          sale.ratePerBag.toNumber() + sale.loadingChargePerBag.toNumber()
+        }
         notes={sale.notes}
       />
     </div>

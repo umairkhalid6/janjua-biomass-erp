@@ -4,7 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, toDateInputValue } from "@/lib/format";
 import { DeleteButton } from "@/components/delete-button";
-import { CustomerPaymentForm } from "../customer-forms";
+import { EditDialog } from "@/components/edit-dialog";
+import {
+  CustomerPaymentForm,
+  EditCustomerForm,
+  EditCustomerPaymentForm,
+} from "../customer-forms";
+import { EditSaleForm } from "@/app/(app)/sales/sale-forms";
 import { deleteCustomerPayment } from "../actions";
 
 type LedgerRow = {
@@ -45,16 +51,53 @@ export default async function CustomerDetailPage({
   const customer = await prisma.customer.findUnique({ where: { id } });
   if (!customer) notFound();
 
-  const [summaryRows, ledgerRows] = await Promise.all([
-    prisma.$queryRaw<SummaryRow[]>`
-      SELECT * FROM v_customer_summary WHERE customer_id = ${id}
-    `,
-    prisma.$queryRaw<LedgerRow[]>`
-      SELECT * FROM v_customer_ledger
-      WHERE customer_id = ${id}
-      ORDER BY date NULLS FIRST, entry_id
-    `,
-  ]);
+  const [summaryRows, ledgerRows, sales, payments, allCustomers] =
+    await Promise.all([
+      prisma.$queryRaw<SummaryRow[]>`
+        SELECT * FROM v_customer_summary WHERE customer_id = ${id}
+      `,
+      prisma.$queryRaw<LedgerRow[]>`
+        SELECT * FROM v_customer_ledger
+        WHERE customer_id = ${id}
+        ORDER BY date NULLS FIRST, entry_id
+      `,
+      prisma.pelletSale.findMany({ where: { customerId: id } }),
+      prisma.customerPayment.findMany({ where: { customerId: id } }),
+      prisma.customer.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, company: true },
+      }),
+    ]);
+
+  // Editable source records keyed by id, for the ledger row edit dialogs.
+  const saleById = new Map(
+    sales.map((s) => [
+      s.id,
+      {
+        id: s.id,
+        date: toDateInputValue(s.date),
+        customerId: s.customerId,
+        quantityBags: Number(s.quantityBags),
+        // EditSaleForm expects the customer-facing rate; the server re-splits
+        // off the loading charge on save.
+        ratePerBag: Number(s.ratePerBag) + Number(s.loadingChargePerBag),
+        notes: s.notes,
+      },
+    ])
+  );
+  const paymentById = new Map(
+    payments.map((p) => [
+      p.id,
+      {
+        id: p.id,
+        customerId: p.customerId,
+        date: toDateInputValue(p.date),
+        amount: Number(p.amount),
+        method: p.method,
+        notes: p.notes,
+      },
+    ])
+  );
 
   const summary = summaryRows[0];
   const outstanding = summary ? Number(summary.outstanding) : 0;
@@ -118,13 +161,20 @@ export default async function CustomerDetailPage({
             className={`mt-1 text-2xl font-bold ${
               outstanding > 0
                 ? "text-amber-800 dark:text-amber-400"
+                : outstanding < 0
+                ? "text-green-700 dark:text-green-400"
                 : "text-neutral-900 dark:text-neutral-50"
             }`}
           >
-            {formatPKR(outstanding)}
+            {formatPKR(Math.abs(outstanding))}
+            {outstanding < 0 ? " Cr" : ""}
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
-            {outstanding > 0 ? "Amount receivable" : "Fully settled"}
+            {outstanding > 0
+              ? "Amount receivable"
+              : outstanding < 0
+              ? "Customer advance (we owe)"
+              : "Fully settled"}
           </p>
         </div>
 
@@ -254,14 +304,51 @@ export default async function CustomerDetailPage({
                         : ""}
                     </td>
                     <td className="px-4 py-3">
-                      {/* entry_id for PAYMENT rows is the CustomerPayment.id */}
-                      {isPayment && (
-                        <form action={deleteCustomerPayment}>
-                          <input type="hidden" name="id" value={row.entryId} />
-                          <input type="hidden" name="customerId" value={id} />
-                          <DeleteButton confirmMessage="Delete this payment? This cannot be undone." />
-                        </form>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {row.entryType === "OPENING" && (
+                          <EditDialog title="Edit Opening Balance">
+                            <EditCustomerForm
+                              existing={{
+                                id: customer.id,
+                                name: customer.name,
+                                company: customer.company,
+                                phone: customer.phone,
+                                openingBalance: Number(
+                                  customer.openingBalance
+                                ),
+                              }}
+                            />
+                          </EditDialog>
+                        )}
+                        {/* entry_id for SALE rows is the PelletSale.id */}
+                        {isSale && saleById.has(row.entryId) && (
+                          <EditDialog title="Edit Invoice">
+                            <EditSaleForm
+                              existing={saleById.get(row.entryId)!}
+                              customers={allCustomers}
+                            />
+                          </EditDialog>
+                        )}
+                        {/* entry_id for PAYMENT rows is the CustomerPayment.id */}
+                        {isPayment && paymentById.has(row.entryId) && (
+                          <EditDialog title="Edit Payment">
+                            <EditCustomerPaymentForm
+                              existing={paymentById.get(row.entryId)!}
+                            />
+                          </EditDialog>
+                        )}
+                        {isPayment && (
+                          <form action={deleteCustomerPayment}>
+                            <input
+                              type="hidden"
+                              name="id"
+                              value={row.entryId}
+                            />
+                            <input type="hidden" name="customerId" value={id} />
+                            <DeleteButton confirmMessage="Delete this payment? This cannot be undone." />
+                          </form>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

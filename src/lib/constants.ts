@@ -5,6 +5,11 @@ export const BAG_KG = 40;
 
 export const CURRENCY = "PKR";
 
+// Every bag sold carries a fixed loading charge, included in the price the
+// user types in (and in the invoice total) but stored separately: a sale
+// entered at 2,500/bag is saved as ratePerBag 2,490 + loadingChargePerBag 10.
+export const LOADING_CHARGE_PER_BAG = 10;
+
 export const MATERIAL_LABELS: Record<string, string> = {
   POPLAR: "Poplar Sawdust",
   HARDWOOD: "Hardwood Sawdust",
