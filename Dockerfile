@@ -62,6 +62,12 @@ COPY --from=migrate /migrate/node_modules /migrate/node_modules
 COPY --from=builder /app/prisma.config.ts /migrate/prisma.config.ts
 COPY --from=builder /app/prisma /migrate/prisma
 
+# Railway's preDeployCommand is NOT run through a shell (&&/cd/redirects are
+# passed as literal argv), so the whole migrate step lives in this script and
+# preDeployCommand is just: /bin/sh /migrate/deploy.sh
+RUN printf '#!/bin/sh\nset -e\ncd /migrate\nexec node node_modules/prisma/build/index.js migrate deploy 2>&1\n' > /migrate/deploy.sh \
+    && chmod +x /migrate/deploy.sh
+
 USER nextjs
 
 EXPOSE 3000

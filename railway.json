@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "preDeployCommand": "echo '[pre-deploy] starting migrate deploy' && cd /migrate && node node_modules/prisma/build/index.js migrate deploy 2>&1 && echo '[pre-deploy] migrate deploy OK'",
+    "preDeployCommand": "/bin/sh /migrate/deploy.sh",
     "startCommand": "node server.js",
     "healthcheckPath": "/login",
     "healthcheckTimeout": 120,
