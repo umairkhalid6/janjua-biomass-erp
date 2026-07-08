@@ -87,7 +87,7 @@ function ExpenseFields({
           required
           allowCustom
           placeholder="Search or add category…"
-          defaultValue={existing?.category ?? "Maintenance"}
+          defaultValue={existing?.category}
           options={categories.map((c) => ({ value: c, label: c }))}
         />
       </div>
@@ -98,7 +98,7 @@ function ExpenseFields({
 export function CreateExpenseForm({ categories }: { categories: string[] }) {
   const [state, action] = useActionState<ActionState, FormData>(
     createExpense,
-    {}
+    {},
   );
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
@@ -108,9 +108,7 @@ export function CreateExpenseForm({ categories }: { categories: string[] }) {
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>
         )}
-        {state.ok && (
-          <span className="text-sm text-green-700">{state.ok}</span>
-        )}
+        {state.ok && <span className="text-sm text-green-700">{state.ok}</span>}
       </div>
     </form>
   );
@@ -125,7 +123,7 @@ export function EditExpenseForm({
 }) {
   const [state, action] = useActionState<ActionState, FormData>(
     updateExpense,
-    {}
+    {},
   );
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
@@ -135,9 +133,7 @@ export function EditExpenseForm({
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>
         )}
-        {state.ok && (
-          <span className="text-sm text-green-700">{state.ok}</span>
-        )}
+        {state.ok && <span className="text-sm text-green-700">{state.ok}</span>}
       </div>
     </form>
   );

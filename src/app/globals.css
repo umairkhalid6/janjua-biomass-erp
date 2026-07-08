@@ -24,3 +24,42 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Browsers force a pale background on autofilled/suggestion-picked inputs,
+   which turns fields white in dark mode. background-color can't be
+   overridden on :-webkit-autofill, so paint over it with an inset shadow
+   matching the field background and delay the browser's color transition. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #171717;
+  caret-color: #171717;
+  transition: background-color 9999999s ease-in-out 0s;
+}
+
+input:autofill,
+textarea:autofill,
+select:autofill {
+  box-shadow: 0 0 0 1000px #ffffff inset;
+}
+
+@media (prefers-color-scheme: dark) {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #0a0a0a inset;
+    -webkit-text-fill-color: #fafafa;
+    caret-color: #fafafa;
+  }
+
+  input:autofill,
+  textarea:autofill,
+  select:autofill {
+    box-shadow: 0 0 0 1000px #0a0a0a inset;
+  }
+}

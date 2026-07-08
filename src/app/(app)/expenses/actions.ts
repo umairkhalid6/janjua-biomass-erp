@@ -9,14 +9,14 @@ export type ActionState = { error?: string; ok?: string };
 
 export async function createExpense(
   _prev: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
   await requireAdmin();
 
   const dateStr = String(formData.get("date") ?? "").trim();
   const item = String(formData.get("item") ?? "").trim();
   const amountStr = String(formData.get("amount") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim() || "Maintenance";
+  const category = String(formData.get("category") ?? "").trim();
 
   if (!dateStr) return { error: "Date is required." };
   if (!item) return { error: "Item description is required." };
@@ -38,7 +38,7 @@ export async function createExpense(
 
 export async function updateExpense(
   _prev: ActionState,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionState> {
   await requireAdmin();
 
@@ -46,7 +46,7 @@ export async function updateExpense(
   const dateStr = String(formData.get("date") ?? "").trim();
   const item = String(formData.get("item") ?? "").trim();
   const amountStr = String(formData.get("amount") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim() || "Maintenance";
+  const category = String(formData.get("category") ?? "").trim();
 
   if (!id) return { error: "Expense ID missing." };
   if (!dateStr) return { error: "Date is required." };
