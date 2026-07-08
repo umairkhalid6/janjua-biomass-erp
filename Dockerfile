@@ -24,6 +24,9 @@ RUN npm run build
 # the CLI's full dependency tree exists without shipping the app's
 # node_modules; version tracks package.json.
 FROM node:22-alpine AS migrate
+# openssl must be present at install time: @prisma/engines detects the
+# platform's OpenSSL to choose which schema-engine binary to download.
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /migrate
 COPY package.json ./app-package.json
 RUN npm install --no-save "prisma@$(node -p "require('./app-package.json').dependencies.prisma")" \
