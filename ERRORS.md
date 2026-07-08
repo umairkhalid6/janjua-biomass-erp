@@ -105,6 +105,11 @@ is contravariantly incompatible with what `<Tooltip>` expects.
 **Cause:** The popover was absolutely positioned inside the scroll container, so it inherited its clipping and stacking context.
 **Fix:** New `src/components/edit-dialog.tsx` — a fixed-position centered modal with overlay (Escape/backdrop close, body scroll lock) — replaces the `<details>` pattern on all seven screens.
 
+## 2026-07-08 — Railway prod: P2022 ColumnNotFound (`pellet_sales.loadingChargePerBag`, `production_days.createdById`) — migrations silently never applied
+**Error:** After deploying, /sales and /production crashed with Prisma P2022: columns from the two newest migrations didn't exist in the Railway database, even though the build succeeded and `preDeployCommand` included `npx prisma migrate deploy`.
+**Cause:** The runner image had neither the `prisma` CLI (`node_modules/prisma` was never copied — only `@prisma/*` and `.prisma`) nor `prisma.config.ts`. Under Prisma 7 the datasource URL lives in `prisma.config.ts` (schema.prisma has no `url`), so even a CLI downloaded ad hoc by `npx` at pre-deploy time couldn't resolve the datasource, and no migration was ever applied. Hand-copying the CLI package alone is not enough: `@prisma/config` has non-`@prisma` runtime deps (`effect`, `c12`, `deepmerge-ts`, `empathic`, plus transitive), so a partial copy dies with MODULE_NOT_FOUND.
+**Fix:** Dockerfile gained a dedicated `migrate` stage (`npm install prisma@<version from package.json>`) whose complete `node_modules` is copied to `/migrate` in the runner, together with `prisma.config.ts` and `prisma/` (schema + migrations) — fully isolated from the app's standalone `node_modules` so no version clobbering. `preDeployCommand` is now `cd /migrate && node node_modules/prisma/build/index.js migrate deploy` (pinned local CLI, no npx download). Verified locally by replicating the exact `/migrate` layout and running the exact command against the dev DB. Caveat: if prod's `_prisma_migrations` table is missing (DB originally created via `db push`), `migrate deploy` fails with P3005 and needs a one-time baseline via `prisma migrate resolve --applied <migration>`.
+
 ---
 
 ## Sheet bugs fixed structurally in the new schema (documented for the record)
