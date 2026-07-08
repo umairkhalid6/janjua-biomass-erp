@@ -40,7 +40,7 @@ export async function updateCustomer(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -73,7 +73,7 @@ export async function createCustomerPayment(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const customerId = String(formData.get("customerId") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();

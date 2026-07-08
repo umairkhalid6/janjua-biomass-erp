@@ -22,6 +22,9 @@ export async function requireUser(): Promise<Session["user"]> {
 /** Returns the session user, redirecting non-admins away (403 by redirect). */
 export async function requireAdmin(): Promise<Session["user"]> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/");
+  // Non-admins land on /production (the only always-allowed area). Redirecting
+  // to "/" would bounce again in middleware (dashboard is admin-only) — avoid
+  // that extra hop / any loop risk.
+  if (user.role !== "ADMIN") redirect("/production");
   return user;
 }

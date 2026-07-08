@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { parseMonthParam } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string };
@@ -11,7 +11,7 @@ export async function upsertElectricityBill(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const monthStr = String(formData.get("month") ?? "").trim();
   const billStr = String(formData.get("billAmount") ?? "").trim();
@@ -42,7 +42,7 @@ export async function upsertElectricityBill(
 }
 
 export async function deleteElectricityBill(formData: FormData): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.electricityBill.delete({ where: { id } });

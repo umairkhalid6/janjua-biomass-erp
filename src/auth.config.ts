@@ -24,8 +24,18 @@ import type { Role } from "@prisma/client";
   }
 })();
 
-// Role-gated route prefixes — ADMIN only.
-const ADMIN_PREFIXES = ["/reports", "/settings", "/users"];
+// Role-gated route prefixes — ADMIN only. Matched as exact path or `prefix/…`.
+const ADMIN_PREFIXES = [
+  "/reports",
+  "/settings",
+  "/users",
+  "/customers",
+  "/suppliers",
+  "/contractor",
+  "/electricity",
+  "/purchases",
+  "/expenses",
+];
 
 export const authConfig = {
   // Trust the host provided by Railway's proxy (x-forwarded-host). Required
@@ -77,10 +87,14 @@ export const authConfig = {
         return Response.redirect(url);
       }
 
-      // ADMIN-only areas: bounce OPERATORs to /production.
-      const adminOnly = ADMIN_PREFIXES.some(
-        (p) => pathname === p || pathname.startsWith(p + "/")
-      );
+      // ADMIN-only areas: bounce OPERATORs to /production. The dashboard at
+      // exactly "/" is admin-only too — matched exactly (never prefix-matched,
+      // or it would block every route).
+      const adminOnly =
+        pathname === "/" ||
+        ADMIN_PREFIXES.some(
+          (p) => pathname === p || pathname.startsWith(p + "/")
+        );
       if (adminOnly && auth.user.role !== "ADMIN") {
         return Response.redirect(new URL("/production", request.nextUrl.origin));
       }

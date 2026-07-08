@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string };
@@ -11,7 +11,7 @@ export async function createExpense(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const dateStr = String(formData.get("date") ?? "").trim();
   const item = String(formData.get("item") ?? "").trim();
@@ -40,7 +40,7 @@ export async function updateExpense(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const id = String(formData.get("id") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();
@@ -69,7 +69,7 @@ export async function updateExpense(
 }
 
 export async function deleteExpense(formData: FormData): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.expense.delete({ where: { id } });

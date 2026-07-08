@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
 import type { MaterialType } from "@prisma/client";
 
@@ -23,7 +23,7 @@ export async function createPurchase(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const dateStr = String(formData.get("date") ?? "").trim();
   const materialType = parseMaterial(formData.get("materialType"));
@@ -73,7 +73,7 @@ export async function updatePurchase(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const id = String(formData.get("id") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();
@@ -123,7 +123,7 @@ export async function updatePurchase(
 }
 
 export async function deletePurchase(formData: FormData): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.materialPurchase.delete({ where: { id } });

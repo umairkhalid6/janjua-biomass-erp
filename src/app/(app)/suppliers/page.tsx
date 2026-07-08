@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { formatPKR } from "@/lib/format";
 import { EditDialog } from "@/components/edit-dialog";
 import { CreateSupplierForm, EditSupplierForm } from "./supplier-forms";
@@ -18,7 +18,7 @@ type SupplierSummaryRow = {
 };
 
 export default async function SuppliersPage() {
-  await requireUser();
+  await requireAdmin();
 
   const [summaryRows, suppliers] = await Promise.all([
     prisma.$queryRaw<SupplierSummaryRow[]>`

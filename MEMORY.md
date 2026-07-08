@@ -277,3 +277,25 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   callback), `toWhatsappNumber()` (phone.ts), `buildWhatsappUrl()`/`invoiceShareMessage()`. Retained
   as the **future upgrade path**: automated WhatsApp Business API (Twilio/Meta) sends need a hosted
   invoice URL + a real phone number, which these already provide.
+
+### Operator role lockdown + expense category dropdown fix (2026-07-08)
+- **Operator capabilities are now exactly:** add/edit production (`upsertProductionDay`), view
+  production history, add a sale (`createSale`), quick-add a customer from the sale form
+  (`createCustomer` stays `requireUser` for this). Everything else is ADMIN-only.
+- Enforced in three layers (all must stay in sync when adding a module):
+  1. Nav: `adminOnly` flags in `src/components/nav-items.ts` (operator sees Production + Sales only).
+  2. Edge: `ADMIN_PREFIXES` in `src/auth.config.ts` now covers reports/settings/users/customers/
+     suppliers/contractor/electricity/purchases/expenses, plus an EXACT match on `/` (dashboard).
+     Non-admins bounce to `/production`. `/i/` public invoice links unaffected.
+  3. Server: `requireAdmin()` on all admin-only pages + server actions. `requireAdmin()` now
+     redirects to `/production` (not `/`) since the dashboard itself is admin-only — avoids a loop.
+- Sales page for operators renders ONLY the Record Sale form; the sales history query is skipped
+  entirely (`isAdmin ? findMany : []`) so past sales never enter the RSC payload. `updateSale`,
+  `deleteSale`, and the invoice route/actions are admin-only. `deleteProductionDay` is admin-only
+  and its button is hidden for operators on the production page.
+- The old `OperatorHome` dashboard component was removed; operators land on `/production`.
+- **`SearchableSelect` fix:** clicking/focusing now always shows the FULL options list; filtering
+  only kicks in after the user types (a `typedSinceOpen` STATE flag — it must be state, not a ref,
+  because `filtered` is a `useMemo` and a ref reset on reopen wouldn't invalidate it). This fixed
+  the expense category combobox hiding previously saved categories behind the pre-filled
+  "Maintenance" text. Categories themselves were already persisted via `distinct: ["category"]`.

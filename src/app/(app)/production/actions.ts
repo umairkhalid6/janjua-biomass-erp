@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireUser, requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string };
@@ -52,7 +52,8 @@ export async function upsertProductionDay(
 }
 
 export async function deleteProductionDay(formData: FormData): Promise<void> {
-  await requireUser();
+  // Operators add + edit production; only admins may delete a day's record.
+  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.productionDay.delete({ where: { id } });

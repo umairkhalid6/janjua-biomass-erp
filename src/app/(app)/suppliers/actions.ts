@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, requireAdmin } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string; id?: string };
@@ -11,7 +11,7 @@ export async function createSupplier(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
@@ -40,7 +40,7 @@ export async function updateSupplier(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -73,7 +73,7 @@ export async function createSupplierPayment(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireAdmin();
 
   const supplierId = String(formData.get("supplierId") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { formatPKR, toDateInputValue } from "@/lib/format";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { ShareWhatsappButton } from "@/components/share-whatsapp-button";
@@ -12,7 +12,7 @@ export default async function InvoicePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  await requireAdmin();
   const { id } = await params;
 
   const sale = await prisma.pelletSale.findUnique({

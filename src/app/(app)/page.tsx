@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatMonth,
   formatPKR,
-  toDateInputValue,
 } from "@/lib/format";
 import { ProfitTrendChart } from "@/components/charts/profit-trend-chart";
 
@@ -20,19 +20,13 @@ type SummaryRow = {
   profit: string | number;
 };
 type LedgerBalanceRow = { balance: string | number };
-type ProductionRow = {
-  day: string | number | null;
-  night: string | number | null;
-};
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const isAdmin = user.role === "ADMIN";
+  // Dashboard is ADMIN-only. Operators are bounced to /production (middleware
+  // also enforces this at the edge; this guards direct RSC render/refresh).
+  if (user.role !== "ADMIN") redirect("/production");
   const monthParam = currentMonthParam();
-
-  if (!isAdmin) {
-    return <OperatorHome name={user.name ?? user.email ?? "there"} monthParam={monthParam} />;
-  }
 
   // --- ADMIN dashboard ---
   const [summaryRows, balanceRows, trendRows] = await Promise.all([
@@ -131,48 +125,6 @@ export default async function DashboardPage() {
           <QuickLink href="/expenses" label="Add Expense" />
           <QuickLink href="/reports" label="All Reports" />
         </div>
-      </div>
-    </div>
-  );
-}
-
-async function OperatorHome({ name, monthParam }: { name: string; monthParam: string }) {
-  // Today's production (UTC-midnight keyed rows).
-  const today = toDateInputValue(new Date());
-  const rows = await prisma.$queryRaw<ProductionRow[]>`
-    SELECT "dayShiftBags" AS day, "nightShiftBags" AS night
-    FROM production_days
-    WHERE date = ${today}::date
-    LIMIT 1
-  `;
-  const dayBags = Number(rows[0]?.day ?? 0);
-  const nightBags = Number(rows[0]?.night ?? 0);
-  const totalBags = dayBags + nightBags;
-
-  return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
-          Welcome, {name}
-        </h1>
-        <p className="mt-0.5 text-sm text-neutral-500">{formatMonth(monthParam)}</p>
-      </div>
-
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Today&apos;s Production
-        </p>
-        <p className="mt-1 text-3xl font-bold text-neutral-900 dark:text-neutral-50">
-          {totalBags.toLocaleString()} <span className="text-base font-medium text-neutral-500">bags</span>
-        </p>
-        <p className="mt-1 text-sm text-neutral-500">
-          Day {dayBags.toLocaleString()} · Night {nightBags.toLocaleString()}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <QuickLink href="/production" label="Log Production" />
-        <QuickLink href="/sales" label="Record Sale" />
       </div>
     </div>
   );

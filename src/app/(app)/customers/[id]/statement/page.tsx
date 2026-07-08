@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, parseDateInput, toDateInputValue } from "@/lib/format";
 import { PrintButton } from "./print-button";
 
@@ -24,7 +24,7 @@ export default async function CustomerStatementPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireUser();
+  await requireAdmin();
   const { id } = await params;
   const sp = await searchParams;
 

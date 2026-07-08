@@ -19,7 +19,8 @@ export default async function ProductionPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
+  const isAdmin = user.role === "ADMIN";
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const { gte, lte } = monthRange(month);
@@ -113,10 +114,12 @@ export default async function ProductionPage({
                       <EditDialog title="Edit Production Entry">
                         <ProductionForm existing={row} />
                       </EditDialog>
-                      <form action={deleteProductionDay}>
-                        <input type="hidden" name="id" value={row.id} />
-                        <DeleteButton confirmMessage="Delete this entry?" />
-                      </form>
+                      {isAdmin && (
+                        <form action={deleteProductionDay}>
+                          <input type="hidden" name="id" value={row.id} />
+                          <DeleteButton confirmMessage="Delete this entry?" />
+                        </form>
+                      )}
                     </div>
                   </td>
                 </tr>

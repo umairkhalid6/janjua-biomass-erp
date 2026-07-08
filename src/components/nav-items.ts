@@ -9,11 +9,11 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard" },
+  { href: "/", label: "Dashboard", adminOnly: true },
   { href: "/production", label: "Production" },
   { href: "/sales", label: "Sales" },
-  { href: "/purchases", label: "Purchases" },
-  { href: "/expenses", label: "Expenses" },
+  { href: "/purchases", label: "Purchases", adminOnly: true },
+  { href: "/expenses", label: "Expenses", adminOnly: true },
   { href: "/reports", label: "Reports", adminOnly: true },
   { href: "/customers", label: "Customers", adminOnly: true },
   { href: "/suppliers", label: "Suppliers", adminOnly: true },

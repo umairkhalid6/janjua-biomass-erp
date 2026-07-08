@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, toDateInputValue } from "@/lib/format";
 import { DeleteButton } from "@/components/delete-button";
 import { SupplierPaymentForm } from "../supplier-forms";
@@ -36,7 +36,7 @@ export default async function SupplierDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  await requireAdmin();
   const { id } = await params;
 
   const supplier = await prisma.supplier.findUnique({ where: { id } });

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { currentMonthParam, formatMonth, formatPKR } from "@/lib/format";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
@@ -13,7 +13,7 @@ function billToMonthStr(date: Date): string {
 }
 
 export default async function ElectricityPage() {
-  await requireUser();
+  await requireAdmin();
 
   const bills = await prisma.electricityBill.findMany({
     orderBy: { month: "desc" },

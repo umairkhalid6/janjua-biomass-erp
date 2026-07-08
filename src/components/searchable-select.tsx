@@ -39,6 +39,10 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+  // True only after the user has typed since the dropdown last opened.
+  // Resets to false on each open so clicking in always shows the full list.
+  // State (not a ref) so the filtered list recomputes when it changes.
+  const [typedSinceOpen, setTypedSinceOpen] = useState(false);
 
   // Keep the visible text in sync when the value changes from outside
   // (e.g. quick-add auto-selecting a newly created supplier/customer).
@@ -61,16 +65,13 @@ export function SearchableSelect({
   }, [value, options, allowCustom]);
 
   const filtered = useMemo(() => {
+    // Show the full list when the dropdown just opened (user hasn't typed yet).
+    // Once the user types, filter by the query text.
+    if (!typedSinceOpen) return options;
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    // Show the full list when the text is exactly the current selection,
-    // so clicking into the field lets the user pick something else. In
-    // allowCustom mode the text *is* the value, so filter normally there.
-    if (!allowCustom && q === labelFor(value).trim().toLowerCase())
-      return options;
     return options.filter((o) => o.label.toLowerCase().includes(q));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, options, value]);
+  }, [query, options, typedSinceOpen]);
 
   const exactMatch = options.some(
     (o) => o.label.trim().toLowerCase() === query.trim().toLowerCase()
@@ -89,6 +90,7 @@ export function SearchableSelect({
   };
 
   const handleInput = (text: string) => {
+    setTypedSinceOpen(true);
     setQuery(text);
     setOpen(true);
     if (allowCustom) {
@@ -117,8 +119,8 @@ export function SearchableSelect({
         placeholder={placeholder}
         autoComplete="off"
         className={inputClass}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
+        onFocus={() => { setTypedSinceOpen(false); setOpen(true); }}
+        onClick={() => { setTypedSinceOpen(false); setOpen(true); }}
         onChange={(e) => handleInput(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);

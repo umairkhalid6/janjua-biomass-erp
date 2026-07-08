@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatDate,
@@ -24,7 +24,7 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<{ month?: string; material?: string }>;
 }) {
-  await requireUser();
+  await requireAdmin();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const material = (sp.material as MaterialType | undefined) ?? null;

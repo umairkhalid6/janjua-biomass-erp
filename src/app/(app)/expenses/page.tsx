@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatDate,
@@ -20,7 +20,7 @@ export default async function ExpensesPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  await requireUser();
+  await requireAdmin();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const { gte, lte } = monthRange(month);

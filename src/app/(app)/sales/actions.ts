@@ -52,7 +52,8 @@ export async function updateSale(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  // Operators may only ADD sales; editing an existing sale is admin-only.
+  await requireAdmin();
 
   const id = String(formData.get("id") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();

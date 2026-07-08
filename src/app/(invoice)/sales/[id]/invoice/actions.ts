@@ -2,7 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireAdmin } from "@/lib/auth-helpers";
 
 /**
  * Return the sale's public share token, generating (and persisting) one on the
@@ -12,7 +12,7 @@ import { requireUser } from "@/lib/auth-helpers";
 export async function getOrCreateShareToken(
   saleId: string
 ): Promise<{ token?: string; error?: string }> {
-  await requireUser();
+  await requireAdmin();
 
   const sale = await prisma.pelletSale.findUnique({
     where: { id: saleId },
