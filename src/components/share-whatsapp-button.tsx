@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { domToPng } from "modern-screenshot";
-import { invoiceCaption } from "@/lib/invoice-share";
+import { invoiceCaption, type InvoiceAmounts } from "@/lib/invoice-share";
 
 // Shares the invoice as an IMAGE (not a link): renders the on-page invoice
 // (element `targetId`) to a PNG on the client, then hands the file to WhatsApp
@@ -15,14 +15,14 @@ export function ShareWhatsappButton({
   fileBaseName,
   customerName,
   invoiceLabel,
-  amount,
+  amounts,
   className,
 }: {
   targetId: string;
   fileBaseName: string; // e.g. "invoice-INV-00006" (no extension)
   customerName: string;
   invoiceLabel: string;
-  amount: string; // pre-formatted, e.g. "PKR 99,600.00"
+  amounts: InvoiceAmounts; // pre-formatted amount breakdown for the caption
   className?: string;
 }) {
   const [pending, setPending] = useState(false);
@@ -85,7 +85,7 @@ export function ShareWhatsappButton({
       const nav = navigator as Navigator & {
         canShare?: (data?: ShareData) => boolean;
       };
-      const caption = invoiceCaption({ customerName, invoiceLabel, amount });
+      const caption = invoiceCaption({ customerName, invoiceLabel, amounts });
 
       if (typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
         try {
@@ -119,7 +119,7 @@ export function ShareWhatsappButton({
   }
 
   return (
-    <div className="inline-flex flex-col items-start gap-1.5">
+    <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:items-start">
       <button
         type="button"
         onClick={handleShare}
@@ -127,7 +127,7 @@ export function ShareWhatsappButton({
         aria-busy={pending}
         className={
           className ??
-          "group inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-emerald-700 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+          "group inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-emerald-700 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none sm:w-auto sm:py-2"
         }
       >
         {pending ? (

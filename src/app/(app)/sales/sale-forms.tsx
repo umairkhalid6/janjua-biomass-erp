@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { createSale, updateSale, type ActionState } from "./actions";
 import { createCustomer } from "@/app/(app)/customers/actions";
 import { SearchableSelect } from "@/components/searchable-select";
+import { DateInput } from "@/components/date-input";
 import { LOADING_CHARGE_PER_BAG } from "@/lib/constants";
 
 const input =
@@ -47,6 +48,30 @@ function RateHint() {
 
 function customerLabel(c: CustomerOption) {
   return `${c.name}${c.company ? ` — ${c.company}` : ""}`;
+}
+
+// Enter moves focus through the form's visible inputs in DOM order instead
+// of submitting; Enter on the last input submits. Inputs that already
+// consumed the keypress (combobox picking an option, quick-add panel) are
+// left alone, and quick-add inputs are excluded from the tab order via
+// data-enter-nav-skip.
+function handleEnterNav(e: React.KeyboardEvent<HTMLFormElement>) {
+  if (e.key !== "Enter" || e.defaultPrevented) return;
+  const target = e.target as HTMLElement;
+  if (!(target instanceof HTMLInputElement)) return;
+  e.preventDefault();
+  const fields = Array.from(
+    e.currentTarget.querySelectorAll<HTMLInputElement>(
+      'input:not([type="hidden"])'
+    )
+  ).filter((el) => !el.closest("[data-enter-nav-skip]") && !el.disabled);
+  const next = fields[fields.indexOf(target) + 1];
+  if (next) {
+    next.focus();
+    next.select();
+  } else {
+    e.currentTarget.requestSubmit();
+  }
 }
 
 // Calls the server action directly instead of rendering a nested <form>.
@@ -165,14 +190,35 @@ export function CreateSaleForm({
   const [state, action] = useActionState<ActionState, FormData>(createSale, {});
   const [localCustomers, setLocalCustomers] = useState(customers);
   const [customerId, setCustomerId] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // After a successful save, clear the form for the next entry but keep the
+  // date at today, and put focus back on the date field.
+  useEffect(() => {
+    if (!state.ok) return;
+    setCustomerId("");
+    const form = formRef.current;
+    if (!form) return;
+    form.reset();
+    const date = form.elements.namedItem("date") as HTMLInputElement | null;
+    if (date) {
+      date.value = new Date().toLocaleDateString("en-CA");
+      date.focus();
+    }
+  }, [state]);
 
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form
+      ref={formRef}
+      action={action}
+      onKeyDown={handleEnterNav}
+      className="grid gap-3 sm:grid-cols-2"
+    >
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
-        <input name="date" type="date" required className={input} />
+        <DateInput name="date" required className={input} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -190,7 +236,7 @@ export function CreateSaleForm({
           }))}
         />
       </div>
-      <div className="sm:col-span-2">
+      <div className="sm:col-span-2" data-enter-nav-skip>
         <QuickAddCustomer
           onAdded={(id, name) => {
             setLocalCustomers((prev) => [...prev, { id, name, company: null }]);
@@ -227,6 +273,34 @@ export function CreateSaleForm({
         />
         <RateHint />
       </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Amount received now (PKR, optional)
+        </label>
+        <input
+          name="amountReceived"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          className={input}
+        />
+        <p className="mt-1 text-[11px] text-neutral-400">
+          Cash taken with this sale — may also cover previous balance. Shown
+          on the invoice as “Amount Received”.
+        </p>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Payment method
+        </label>
+        <select name="paymentMethod" defaultValue="Cash" className={input}>
+          <option>Cash</option>
+          <option>Bank</option>
+          <option>Cheque</option>
+          <option>Online</option>
+        </select>
+      </div>
       <div className="sm:col-span-2">
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Notes (optional)
@@ -261,7 +335,11 @@ export function EditSaleForm({
   const [state, action] = useActionState<ActionState, FormData>(updateSale, {});
 
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form
+      action={action}
+      onKeyDown={handleEnterNav}
+      className="grid gap-3 sm:grid-cols-2"
+    >
       <input type="hidden" name="id" value={existing.id} />
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">

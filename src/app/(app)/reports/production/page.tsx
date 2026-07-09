@@ -2,14 +2,14 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
-  currentMonthParam,
   formatDate,
-  formatMonth,
   formatPKR,
-  monthRange,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
 } from "@/lib/format";
 import { BAG_KG } from "@/lib/constants";
-import { MonthPicker } from "@/components/month-picker";
+import { PeriodPicker } from "@/components/period-picker";
 import { ProductionDailyChart } from "@/components/charts/production-daily-chart";
 import { ProductionTrendChart } from "@/components/charts/production-trend-chart";
 
@@ -24,12 +24,12 @@ type TrendRow = { month: Date; total_bags: string | number };
 export default async function ProductionReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const month = sp.month ?? currentMonthParam();
-  const { gte, lte } = monthRange(month);
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
   const [daily, trend] = await Promise.all([
     prisma.$queryRaw<DailyRow[]>`
@@ -73,8 +73,13 @@ export default async function ProductionReportPage({
     { dayBags: 0, nightBags: 0, total: 0, kg: 0, laborCost: 0 }
   );
 
+  // Day-only labels read cleanly for a single month; across a multi-month
+  // window include the month so repeated day numbers stay distinguishable.
+  const multiMonth = period !== "1m";
   const dailyChart = rows.map((r) => ({
-    label: String(r.date.getUTCDate()),
+    label: multiMonth
+      ? r.date.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
+      : String(r.date.getUTCDate()),
     day: r.dayBags,
     night: r.nightBags,
   }));
@@ -92,10 +97,10 @@ export default async function ProductionReportPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Production</h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{formatMonth(month)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <PeriodPicker value={period} />
         </Suspense>
       </div>
 
@@ -107,7 +112,7 @@ export default async function ProductionReportPage({
         {dailyChart.length > 0 ? (
           <ProductionDailyChart data={dailyChart} />
         ) : (
-          <p className="py-8 text-center text-sm text-neutral-400">No production this month.</p>
+          <p className="py-8 text-center text-sm text-neutral-400">No production in this period.</p>
         )}
       </section>
 
@@ -129,7 +134,7 @@ export default async function ProductionReportPage({
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-400">
-                    No production recorded this month.
+                    No production recorded in this period.
                   </td>
                 </tr>
               )}

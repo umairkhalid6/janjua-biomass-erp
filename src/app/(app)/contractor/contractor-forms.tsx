@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { createPayment, createAdjustment, type ActionState } from "./actions";
+import { DateInput } from "@/components/date-input";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -31,7 +32,7 @@ export function PaymentForm() {
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
-        <input name="date" type="date" required className={input} />
+        <DateInput name="date" required className={input} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -81,18 +82,28 @@ export function AdjustmentForm() {
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
-        <input name="date" type="date" required className={input} />
+        <DateInput name="date" required className={input} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Amount (PKR, ± allowed)
+          Type
+        </label>
+        <select name="direction" required defaultValue="paying" className={input}>
+          <option value="paying">Paying — we pay the contractor</option>
+          <option value="receiving">Receiving — contractor pays us</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Amount (PKR)
         </label>
         <input
           name="amount"
           type="number"
           step="0.01"
+          min="0.01"
           required
-          placeholder="Positive = owed to contractor"
+          placeholder="Amount"
           className={input}
         />
       </div>

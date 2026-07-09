@@ -34,6 +34,10 @@ model User {
   sales        PelletSale[]
   productionCreated ProductionDay[] @relation("ProductionDayCreatedBy")
   productionUpdated ProductionDay[] @relation("ProductionDayUpdatedBy")
+  productionDayCreated   ProductionDay[] @relation("ProductionDayShiftCreatedBy")
+  productionDayUpdated   ProductionDay[] @relation("ProductionDayShiftUpdatedBy")
+  productionNightCreated ProductionDay[] @relation("ProductionNightShiftCreatedBy")
+  productionNightUpdated ProductionDay[] @relation("ProductionNightShiftUpdatedBy")
 
   @@map("users")
 }
@@ -112,9 +116,15 @@ model CustomerPayment {
   amount     Decimal  @db.Decimal(14, 2)
   method     String   @default("Cash") // Cash / Bank / Cheque / Online
   notes      String?
+  // Set when the payment was received against a specific invoice (at sale
+  // entry or from the invoice page). The money is real even if the invoice
+  // is later deleted, so the link severs (SET NULL) rather than cascades.
+  saleId     String?
+  sale       PelletSale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
 
   @@index([date])
+  @@index([saleId])
   @@map("customer_payments")
 }
 
@@ -137,6 +147,7 @@ model PelletSale {
   createdById  String?
   createdBy    User?    @relation(fields: [createdById], references: [id])
   createdAt    DateTime @default(now())
+  payments     CustomerPayment[]
 
   @@index([date])
   @@map("pellet_sales")
@@ -155,6 +166,19 @@ model ProductionDay {
   updatedBy      User?    @relation("ProductionDayUpdatedBy", fields: [updatedById], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
+
+  // Day and night shifts are independent entries: each shift tracks who first
+  // entered it and who last edited it, so the audit trail is per shift.
+  dayCreatedById   String?
+  dayCreatedBy     User?     @relation("ProductionDayShiftCreatedBy", fields: [dayCreatedById], references: [id])
+  dayUpdatedById   String?
+  dayUpdatedBy     User?     @relation("ProductionDayShiftUpdatedBy", fields: [dayUpdatedById], references: [id])
+  dayUpdatedAt     DateTime?
+  nightCreatedById String?
+  nightCreatedBy   User?     @relation("ProductionNightShiftCreatedBy", fields: [nightCreatedById], references: [id])
+  nightUpdatedById String?
+  nightUpdatedBy   User?     @relation("ProductionNightShiftUpdatedBy", fields: [nightUpdatedById], references: [id])
+  nightUpdatedAt   DateTime?
 
   @@map("production_days")
 }

@@ -76,6 +76,36 @@ export async function updateCustomer(
   return { ok: "Customer updated." };
 }
 
+export async function deleteCustomer(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { error: "Customer ID missing." };
+
+  // Sales and payments reference customers with ON DELETE RESTRICT, so a
+  // customer with ledger history cannot be removed — the records would be
+  // orphaned. Check up front to give a clear message instead of a DB error.
+  const [salesCount, paymentsCount] = await Promise.all([
+    prisma.pelletSale.count({ where: { customerId: id } }),
+    prisma.customerPayment.count({ where: { customerId: id } }),
+  ]);
+  if (salesCount > 0 || paymentsCount > 0) {
+    return {
+      error: `This customer has ${salesCount} sale(s) and ${paymentsCount} payment(s) on record and cannot be deleted. Delete those entries first.`,
+    };
+  }
+
+  await prisma.customer.delete({ where: { id } });
+
+  revalidatePath("/customers");
+  revalidatePath("/sales");
+  revalidatePath("/reports/customers");
+  return { ok: "Customer deleted." };
+}
+
 export async function createCustomerPayment(
   _prev: ActionState,
   formData: FormData

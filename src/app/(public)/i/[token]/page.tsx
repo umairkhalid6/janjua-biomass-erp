@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { toDateInputValue } from "@/lib/format";
+import { getInvoiceBalances } from "@/lib/invoice-balance";
 import { InvoiceDocument } from "@/components/invoice-document";
 
 // Public, no-auth invoice page reached via a tokenized WhatsApp link.
@@ -22,6 +23,8 @@ export default async function PublicInvoicePage({
   });
   if (!sale) notFound();
 
+  const balances = await getInvoiceBalances(sale.id);
+
   return (
     <div className="min-h-screen bg-white text-neutral-900">
       <InvoiceDocument
@@ -39,6 +42,8 @@ export default async function PublicInvoicePage({
           sale.ratePerBag.toNumber() + sale.loadingChargePerBag.toNumber()
         }
         notes={sale.notes}
+        previousBalance={balances.previousBalance}
+        amountReceived={balances.amountReceived}
       />
     </div>
   );

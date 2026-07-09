@@ -67,3 +67,51 @@ export function monthRange(monthParam: string): { gte: Date; lte: Date } {
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
   return { gte: start, lte: end };
 }
+
+// --- Period (trailing-month range) filtering for the dashboard & reports ---
+
+/**
+ * Selectable reporting windows. Each spans the trailing N calendar months up to
+ * and including the current month (e.g. "3m" in July = May + June + July).
+ */
+export const PERIOD_OPTIONS = [
+  { value: "1m", label: "This month", months: 1 },
+  { value: "3m", label: "Last 3 months", months: 3 },
+  { value: "6m", label: "Last 6 months", months: 6 },
+  { value: "12m", label: "Last 12 months", months: 12 },
+] as const;
+
+export type PeriodValue = (typeof PERIOD_OPTIONS)[number]["value"];
+
+export const DEFAULT_PERIOD: PeriodValue = "1m";
+
+/** Coerce an arbitrary query param into a known period value (defaults to this month). */
+export function parsePeriodParam(param: string | undefined): PeriodValue {
+  return PERIOD_OPTIONS.find((o) => o.value === param)?.value ?? DEFAULT_PERIOD;
+}
+
+/** Number of trailing months a period value spans. */
+export function periodMonths(period: PeriodValue): number {
+  return PERIOD_OPTIONS.find((o) => o.value === period)?.months ?? 1;
+}
+
+/** Human label for a period value, e.g. "Last 3 months". */
+export function periodLabel(period: PeriodValue): string {
+  return PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? "This month";
+}
+
+/**
+ * UTC date range covering the trailing N months up to and including the current
+ * month. `gte` is the 1st of the earliest month, `lte` the last day of the
+ * current month. Safe for @db.Date comparisons and for filtering month-grain
+ * views (whose `month` column is the 1st of each month).
+ */
+export function periodRange(period: PeriodValue): { gte: Date; lte: Date } {
+  const months = periodMonths(period);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const gte = new Date(Date.UTC(y, m - (months - 1), 1));
+  const lte = new Date(Date.UTC(y, m + 1, 0)); // last day of the current month
+  return { gte, lte };
+}

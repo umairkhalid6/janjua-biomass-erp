@@ -90,7 +90,7 @@ export default async function ContractorPage({
         className={`rounded-xl border p-4 ${
           currentBalance >= 0
             ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
-            : "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+            : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
         }`}
       >
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -100,7 +100,7 @@ export default async function ContractorPage({
           className={`mt-1 text-2xl font-bold ${
             currentBalance >= 0
               ? "text-amber-800 dark:text-amber-400"
-              : "text-green-700 dark:text-green-400"
+              : "text-red-700 dark:text-red-400"
           }`}
         >
           {formatPKR(Math.abs(currentBalance))}
@@ -127,8 +127,10 @@ export default async function ContractorPage({
             Record Adjustment
           </h2>
           <p className="mb-3 text-xs text-neutral-500">
-            Correction or opening balance. Positive = owed to contractor,
-            negative = owed by contractor.
+            Correction, opening balance, or cash movement.{" "}
+            <span className="font-medium">Paying</span> the contractor raises
+            what he owes us; <span className="font-medium">receiving</span> from
+            him lowers it.
           </p>
           <AdjustmentForm />
         </section>
@@ -204,6 +206,7 @@ export default async function ContractorPage({
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
               <tr>
                 <th className="px-4 py-3 font-medium">Date</th>
+                <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
                 <th className="px-4 py-3 font-medium">Reason</th>
               </tr>
@@ -212,7 +215,7 @@ export default async function ContractorPage({
               {adjustmentRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={3}
+                    colSpan={4}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
                     No adjustments this month.
@@ -224,15 +227,19 @@ export default async function ContractorPage({
                   <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
                     {formatDate(r.date)}
                   </td>
-                  <td
-                    className={`px-4 py-3 text-right font-semibold ${
-                      r.amount >= 0
-                        ? "text-amber-700 dark:text-amber-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {r.amount >= 0 ? "+" : ""}
-                    {formatPKR(r.amount)}
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        r.amount < 0
+                          ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                          : "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
+                      }`}
+                    >
+                      {r.amount < 0 ? "Paying" : "Receiving"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-neutral-900 dark:text-neutral-50">
+                    {formatPKR(Math.abs(r.amount))}
                   </td>
                   <td className="px-4 py-3 text-xs text-neutral-500">
                     {r.reason}
@@ -243,7 +250,10 @@ export default async function ContractorPage({
             {adjustmentRows.length > 0 && (
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
-                  <td className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
+                  <td
+                    colSpan={2}
+                    className="px-4 py-3 text-neutral-900 dark:text-neutral-50"
+                  >
                     Net Adjustments
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">

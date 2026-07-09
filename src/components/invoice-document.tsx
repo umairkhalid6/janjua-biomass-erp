@@ -19,6 +19,14 @@ export type InvoiceDocumentProps = {
   quantityBags: number;
   ratePerBag: number;
   notes?: string | null;
+  /**
+   * Customer's ledger balance carried from before this invoice.
+   * Positive = dues (shown as "Previous Balance"); negative = advance credit
+   * (shown as a deduction); 0/omitted = the row is hidden entirely.
+   */
+  previousBalance?: number;
+  /** Payments received against this invoice; hidden when 0/omitted. */
+  amountReceived?: number;
   /** Optional DOM id on the root — used to capture the invoice as an image. */
   id?: string;
 };
@@ -45,44 +53,50 @@ export function InvoiceDocument({
   quantityBags,
   ratePerBag,
   notes,
+  previousBalance = 0,
+  amountReceived = 0,
   id,
 }: InvoiceDocumentProps) {
   const amount = quantityBags * ratePerBag;
   const weightKg = quantityBags * BAG_KG;
+  const totalPayable = amount + previousBalance;
+  const balanceDue = totalPayable - amountReceived;
+  // Decimal noise guard: treat sub-paisa remainders as settled.
+  const isPaid = amountReceived > 0 && balanceDue < 0.005;
 
   return (
     <div
       id={id}
-      className="mx-auto max-w-2xl bg-white px-8 py-10 text-neutral-900 print:max-w-none print:px-0 print:py-0"
+      className="mx-auto max-w-2xl bg-white px-5 py-8 text-neutral-900 sm:px-8 sm:py-10 print:max-w-none print:px-0 print:py-0"
     >
       {/* Brand accent rule */}
-      <div className="mb-8 h-1.5 w-full rounded-full bg-emerald-800 [print-color-adjust:exact]" />
+      <div className="mb-6 h-1.5 w-full rounded-full bg-emerald-800 [print-color-adjust:exact] sm:mb-8" />
 
       {/* Header: brand vs invoice meta */}
-      <header className="mb-10 flex items-start justify-between gap-6">
-        <div className="flex items-center gap-3.5">
+      <header className="mb-8 flex items-start justify-between gap-4 sm:mb-10 sm:gap-6">
+        <div className="flex items-center gap-3 sm:gap-3.5">
           <BrandMark />
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-emerald-900">
+            <h1 className="text-lg font-bold leading-tight tracking-tight text-emerald-900 sm:text-xl">
               Janjua Biomass Pellets
             </h1>
-            <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-neutral-500">
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-neutral-500 sm:text-xs">
               Biomass Pellet Manufacturer
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold uppercase tracking-widest text-neutral-300 print:text-neutral-400">
+        <div className="shrink-0 text-right">
+          <p className="text-xl font-bold uppercase tracking-widest text-neutral-300 print:text-neutral-400 sm:text-2xl">
             Invoice
           </p>
-          <p className="mt-1 text-base font-semibold text-emerald-800">
+          <p className="mt-1 text-sm font-semibold text-emerald-800 sm:text-base">
             {invoiceLabel}
           </p>
         </div>
       </header>
 
       {/* Bill To + invoice details */}
-      <section className="mb-10 flex items-start justify-between gap-8">
+      <section className="mb-8 flex flex-col gap-6 sm:mb-10 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-emerald-700">
             Bill To
@@ -117,8 +131,47 @@ export function InvoiceDocument({
         </dl>
       </section>
 
-      {/* Line items */}
-      <table className="w-full border-collapse text-sm">
+      {/* Line items — mobile card (screens < sm). The 4-column table below
+          would overflow a phone's width and clip the Rate/Amount columns, so
+          on small screens the single line item is shown stacked instead. */}
+      <div className="sm:hidden">
+        <div className="border-y-2 border-emerald-800 bg-emerald-50 px-3 py-2 [print-color-adjust:exact]">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-emerald-900">
+            Item
+          </span>
+        </div>
+        <div className="border-b border-neutral-200 px-3 py-4">
+          <p className="font-medium text-neutral-900">Biomass Pellets</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            {quantityBags.toFixed(2)} bags × {BAG_KG} kg/bag ={" "}
+            {weightKg.toFixed(2)} kg
+          </p>
+          <dl className="mt-3 space-y-1.5 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="text-neutral-500">Qty</dt>
+              <dd className="font-medium text-neutral-700">
+                {quantityBags.toFixed(2)} bags
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-neutral-500">Rate</dt>
+              <dd className="font-medium text-neutral-700">
+                {formatPKR(ratePerBag)}/bag
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-t border-neutral-100 pt-1.5">
+              <dt className="text-neutral-500">Amount</dt>
+              <dd className="font-semibold text-neutral-900">
+                {formatPKR(amount)}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      {/* Line items — table (sm and up, including print & the shared PNG which
+          is captured at a fixed 720px width). */}
+      <table className="hidden w-full border-collapse text-sm sm:table">
         <thead>
           <tr className="border-y-2 border-emerald-800 bg-emerald-50 [print-color-adjust:exact]">
             <th className="py-2.5 pl-3 pr-2 text-left text-[11px] font-semibold uppercase tracking-widest text-emerald-900">
@@ -157,23 +210,68 @@ export function InvoiceDocument({
         </tbody>
       </table>
 
-      {/* Totals */}
+      {/* Totals — previous dues and received amounts appear only when they
+          exist, so a plain fully-new invoice stays as clean as before. */}
       <section className="mt-6 flex justify-end">
-        <div className="w-72">
+        <div className="w-full sm:w-72">
           <div className="flex items-center justify-between px-3 py-1.5 text-sm">
-            <span className="text-neutral-500">Subtotal</span>
+            <span className="text-neutral-500">This Invoice</span>
             <span className="font-medium text-neutral-900">
               {formatPKR(amount)}
             </span>
           </div>
+          {previousBalance > 0 && (
+            <div className="flex items-center justify-between px-3 py-1.5 text-sm">
+              <span className="text-neutral-500">Previous Balance</span>
+              <span className="font-medium text-amber-700">
+                {formatPKR(previousBalance)}
+              </span>
+            </div>
+          )}
+          {previousBalance < 0 && (
+            <div className="flex items-center justify-between px-3 py-1.5 text-sm">
+              <span className="text-neutral-500">Advance Credit</span>
+              <span className="font-medium text-emerald-700">
+                − {formatPKR(-previousBalance)}
+              </span>
+            </div>
+          )}
+          {previousBalance !== 0 && (
+            <div className="flex items-center justify-between border-t border-neutral-200 px-3 py-1.5 text-sm">
+              <span className="font-medium text-neutral-600">
+                Total Payable
+              </span>
+              <span className="font-semibold text-neutral-900">
+                {formatPKR(totalPayable)}
+              </span>
+            </div>
+          )}
+          {amountReceived > 0 && (
+            <div className="flex items-center justify-between px-3 py-1.5 text-sm">
+              <span className="text-neutral-500">Amount Received</span>
+              <span className="font-medium text-emerald-700">
+                − {formatPKR(amountReceived)}
+              </span>
+            </div>
+          )}
           <div className="mt-1 flex items-center justify-between rounded-lg bg-emerald-800 px-3 py-2.5 [print-color-adjust:exact]">
             <span className="text-sm font-semibold uppercase tracking-wide text-emerald-100">
-              Total Due
+              Balance Due
             </span>
             <span className="text-lg font-bold text-white">
-              {formatPKR(amount)}
+              {formatPKR(Math.max(balanceDue, 0))}
             </span>
           </div>
+          {isPaid && (
+            <p className="mt-2 text-center text-xs font-semibold uppercase tracking-widest text-emerald-700">
+              ✓ Paid in full — thank you!
+            </p>
+          )}
+          {balanceDue < -0.005 && (
+            <p className="mt-2 text-center text-xs font-medium text-emerald-700">
+              Credit on account: {formatPKR(-balanceDue)}
+            </p>
+          )}
         </div>
       </section>
 

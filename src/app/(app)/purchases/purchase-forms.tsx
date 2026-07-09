@@ -6,6 +6,7 @@ import { createPurchase, updatePurchase, type ActionState } from "./actions";
 import { createSupplier } from "@/app/(app)/suppliers/actions";
 import { MATERIAL_LABELS } from "@/lib/constants";
 import { SearchableSelect } from "@/components/searchable-select";
+import { DateInput } from "@/components/date-input";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -189,9 +190,8 @@ function PurchaseForm({
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
-        <input
+        <DateInput
           name="date"
-          type="date"
           required
           defaultValue={existing?.date ?? ""}
           className={input}

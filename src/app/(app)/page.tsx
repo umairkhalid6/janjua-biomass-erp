@@ -1,38 +1,60 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-helpers";
 import {
-  currentMonthParam,
-  formatMonth,
   formatPKR,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
 } from "@/lib/format";
+import { PeriodPicker } from "@/components/period-picker";
 import { ProfitTrendChart } from "@/components/charts/profit-trend-chart";
 
-// Raw view row shapes. Postgres numerics arrive as strings via pg — coerce with Number().
-type SummaryRow = {
-  month: Date;
+// Period totals: v_monthly_summary is month-grain, so a window is just a SUM
+// over the months in range. Postgres numerics arrive as strings via pg.
+type PeriodTotalsRow = {
   sales_revenue: string | number;
   bags_sold: string | number;
-  avg_rate_per_bag: string | number;
   bags_produced: string | number;
+  purchases: string | number;
+  labor_cost: string | number;
+  expenses: string | number;
+  electricity_cost: string | number;
   total_cost: string | number;
   profit: string | number;
 };
 type LedgerBalanceRow = { balance: string | number };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const user = await requireUser();
   // Dashboard is ADMIN-only. Operators are bounced to /production (middleware
   // also enforces this at the edge; this guards direct RSC render/refresh).
   if (user.role !== "ADMIN") redirect("/production");
-  const monthParam = currentMonthParam();
+  const sp = await searchParams;
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
   // --- ADMIN dashboard ---
   const [summaryRows, balanceRows, trendRows] = await Promise.all([
-    prisma.$queryRaw<SummaryRow[]>`
-      SELECT * FROM v_monthly_summary
-      WHERE month = date_trunc('month', now())::date
+    prisma.$queryRaw<PeriodTotalsRow[]>`
+      SELECT
+        COALESCE(SUM(sales_revenue), 0)               AS sales_revenue,
+        COALESCE(SUM(bags_sold), 0)                   AS bags_sold,
+        COALESCE(SUM(bags_produced), 0)               AS bags_produced,
+        COALESCE(SUM(sawdust_cost + chips_cost), 0)   AS purchases,
+        COALESCE(SUM(labor_cost), 0)                  AS labor_cost,
+        COALESCE(SUM(expenses), 0)                    AS expenses,
+        COALESCE(SUM(electricity_cost), 0)            AS electricity_cost,
+        COALESCE(SUM(total_cost), 0)                  AS total_cost,
+        COALESCE(SUM(profit), 0)                      AS profit
+      FROM v_monthly_summary
+      WHERE month >= ${gte}::date AND month <= ${lte}::date
     `,
     prisma.$queryRaw<LedgerBalanceRow[]>`
       SELECT balance FROM v_contractor_ledger
@@ -47,11 +69,16 @@ export default async function DashboardPage() {
   ]);
 
   const s = summaryRows[0];
-  const sales = Number(s?.sales_revenue ?? 0);
-  const totalCost = Number(s?.total_cost ?? 0);
-  const profit = Number(s?.profit ?? 0);
-  const bagsProduced = Number(s?.bags_produced ?? 0);
-  const bagsSold = Number(s?.bags_sold ?? 0);
+  const n = (v: string | number | undefined) => Number(v ?? 0);
+  const sales = n(s?.sales_revenue);
+  const purchases = n(s?.purchases);
+  const laborCost = n(s?.labor_cost);
+  const expenses = n(s?.expenses);
+  const electricity = n(s?.electricity_cost);
+  const totalCost = n(s?.total_cost);
+  const profit = n(s?.profit);
+  const bagsProduced = n(s?.bags_produced);
+  const bagsSold = n(s?.bags_sold);
   const contractorBalance = balanceRows.length ? Number(balanceRows[0].balance) : 0;
 
   const trend = trendRows.map((r) => ({
@@ -61,17 +88,26 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
-          Dashboard
-        </h1>
-        <p className="mt-0.5 text-sm text-neutral-500">{formatMonth(monthParam)}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
+            Dashboard
+          </h1>
+          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
+        </div>
+        <Suspense>
+          <PeriodPicker value={period} />
+        </Suspense>
       </div>
 
-      {/* Headline cards */}
+      {/* Headline cards — totals for the selected period */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Sales" value={formatPKR(sales)} sub={`${bagsSold.toLocaleString()} bags sold`} tone="blue" />
-        <StatCard label="Total Cost" value={formatPKR(totalCost)} sub="this month" tone="amber" />
+        <StatCard label="Purchases" value={formatPKR(purchases)} sub="sawdust + chips" tone="amber" />
+        <StatCard label="Contractor" value={formatPKR(laborCost)} sub="labor cost" tone="amber" />
+        <StatCard label="Expenses" value={formatPKR(expenses)} sub="operating" tone="amber" />
+        <StatCard label="Electricity" value={formatPKR(electricity)} sub="bills" tone="amber" />
+        <StatCard label="Total Cost" value={formatPKR(totalCost)} sub="all costs" tone="amber" />
         <StatCard
           label="Profit"
           value={formatPKR(profit)}

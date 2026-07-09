@@ -350,3 +350,17 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   Gotcha: an already-running `next dev` keeps the OLD generated Prisma client in memory after
   `prisma generate` — pages 500 with "Cannot read properties of undefined (reading 'toNumber')"
   until the dev server is restarted.
+
+### Sales form Enter-key flow + post-save reset (2026-07-08)
+- **Enter now walks the Record Sale form instead of submitting:** date → customer → quantity →
+  rate → notes; Enter on notes submits. Implemented as `handleEnterNav` (form-level onKeyDown) in
+  sales/sale-forms.tsx — it skips events already handled (`e.defaultPrevented`), so Enter with the
+  customer dropdown open picks the highlighted option (SearchableSelect's own handler) and the NEXT
+  Enter advances. Quick-add customer inputs are excluded via `data-enter-nav-skip` on their wrapper.
+  Applied to both CreateSaleForm and EditSaleForm.
+- **After a successful save the create form resets** (form.reset() + customerId state cleared) but
+  the date is re-set to today and refocused for rapid entry. Triggered by a useEffect on
+  `state.ok` from useActionState.
+- **Two dev servers in one folder:** Next 16's dev lock lives in distDir, so next.config.ts now
+  honors `NEXT_DIST_DIR`; launch.json's `erp-dev` runs with `NEXT_DIST_DIR=.next-preview` on port
+  3011 so a preview server can run alongside the main dev server (.next-preview is gitignored).

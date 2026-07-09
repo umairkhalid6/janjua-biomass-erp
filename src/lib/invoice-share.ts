@@ -9,23 +9,46 @@ export function invoicePath(token: string): string {
   return `/i/${token}`;
 }
 
+/** Formatted-amount breakdown shown in captions; optional rows are omitted. */
+export type InvoiceAmounts = {
+  invoiceAmount: string; // e.g. "PKR 99,600.00"
+  previousBalance?: string | null; // only when dues were carried forward
+  totalPayable?: string | null; // only alongside previousBalance
+  amountReceived?: string | null; // only when a payment was recorded
+  balanceDue: string;
+};
+
 /**
  * Caption sent alongside the invoice IMAGE via the native share sheet
  * (navigator.share). No link — the invoice travels as an attached PNG.
+ * Mirrors the invoice's totals block: previous balance and received amount
+ * appear only when they exist.
  */
 export function invoiceCaption(opts: {
   customerName: string;
   invoiceLabel: string;
-  amount: string; // already formatted, e.g. "PKR 99,600.00"
+  amounts: InvoiceAmounts;
 }): string {
-  return [
+  const { amounts } = opts;
+  const lines = [
     `Assalam-o-Alaikum ${opts.customerName},`,
     ``,
     `Please find your invoice ${opts.invoiceLabel} from Janjua Biomass Pellets.`,
-    `Amount due: ${opts.amount}`,
+    `Invoice amount: ${amounts.invoiceAmount}`,
+  ];
+  if (amounts.previousBalance) {
+    lines.push(`Previous balance: ${amounts.previousBalance}`);
+    if (amounts.totalPayable) lines.push(`Total payable: ${amounts.totalPayable}`);
+  }
+  if (amounts.amountReceived) {
+    lines.push(`Amount received: ${amounts.amountReceived}`);
+  }
+  lines.push(
+    `Balance due: ${amounts.balanceDue}`,
     ``,
-    `JazakAllah for your business.`,
-  ].join("\n");
+    `JazakAllah for your business.`
+  );
+  return lines.join("\n");
 }
 
 /**

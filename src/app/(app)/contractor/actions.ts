@@ -42,14 +42,22 @@ export async function createAdjustment(
 
   const dateStr = String(formData.get("date") ?? "").trim();
   const amountStr = String(formData.get("amount") ?? "").trim();
+  const direction = String(formData.get("direction") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
 
   if (!dateStr) return { error: "Date is required." };
   if (!amountStr) return { error: "Amount is required." };
+  if (direction !== "paying" && direction !== "receiving")
+    return { error: "Select whether you are paying or receiving." };
   if (!reason) return { error: "Reason is required." };
 
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount)) return { error: "Amount must be a number." };
+  const magnitude = parseFloat(amountStr);
+  if (isNaN(magnitude) || magnitude <= 0)
+    return { error: "Amount must be a positive number." };
+
+  // Paying the contractor raises what he owes us (negative balance);
+  // receiving from him lowers it (positive balance).
+  const amount = direction === "paying" ? -magnitude : magnitude;
 
   const date = parseDateInput(dateStr);
 

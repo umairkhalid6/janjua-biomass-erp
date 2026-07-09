@@ -28,17 +28,17 @@ export default async function SalesPage({
   const { gte, lte } = monthRange(month);
   const isAdmin = session.role === "ADMIN";
 
-  // Operators may ADD sales but must not see any sales history/totals. Skip the
-  // sales query entirely for them (defence in depth — the table is hidden below
-  // regardless, but this avoids leaking past sales data into the RSC payload).
+  // Admins see every sale for the month. Operators see only the sales they
+  // entered themselves (scoped by createdById) — never records added by others.
   const [sales, customers] = await Promise.all([
-    isAdmin
-      ? prisma.pelletSale.findMany({
-          where: { date: { gte, lte } },
-          include: { customer: true },
-          orderBy: { date: "asc" },
-        })
-      : Promise.resolve([]),
+    prisma.pelletSale.findMany({
+      where: {
+        date: { gte, lte },
+        ...(isAdmin ? {} : { createdById: session.id }),
+      },
+      include: { customer: true },
+      orderBy: { date: "asc" },
+    }),
     prisma.customer.findMany({ orderBy: { name: "asc" } }),
   ]);
 
@@ -81,17 +81,14 @@ export default async function SalesPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
             Sales
           </h1>
-          {isAdmin && (
-            <p className="mt-0.5 text-sm text-neutral-500">
-              {formatMonth(month)}
-            </p>
-          )}
+          <p className="mt-0.5 text-sm text-neutral-500">
+            {formatMonth(month)}
+            {!isAdmin && " · your entries"}
+          </p>
         </div>
-        {isAdmin && (
-          <Suspense>
-            <MonthPicker value={month} />
-          </Suspense>
-        )}
+        <Suspense>
+          <MonthPicker value={month} />
+        </Suspense>
       </div>
 
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -101,7 +98,6 @@ export default async function SalesPage({
         <CreateSaleForm customers={customerOptions} />
       </section>
 
-      {isAdmin && (
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -213,7 +209,6 @@ export default async function SalesPage({
           </table>
         </div>
       </section>
-      )}
     </div>
   );
 }

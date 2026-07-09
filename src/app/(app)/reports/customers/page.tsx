@@ -1,6 +1,14 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { formatDate, formatPKR } from "@/lib/format";
+import {
+  formatDate,
+  formatPKR,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
+} from "@/lib/format";
+import { PeriodPicker } from "@/components/period-picker";
 
 type CustomerRow = {
   customer_id: string;
@@ -13,11 +21,33 @@ type CustomerRow = {
   last_sale_date: Date | null;
 };
 
-export default async function CustomersReportPage() {
+export default async function CustomersReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   await requireAdmin();
+  const sp = await searchParams;
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
+  // Per-customer sales within the window (gross = net + loading, matching
+  // v_customer_summary). INNER JOIN so only customers active in the window show.
   const ledger = await prisma.$queryRaw<CustomerRow[]>`
-    SELECT * FROM v_customer_summary ORDER BY total_sales DESC, name ASC
+    SELECT
+      c.id                                                              AS customer_id,
+      c.name,
+      c.company,
+      COUNT(s.id)                                                       AS sales_count,
+      COALESCE(SUM(s."quantityBags"), 0)                                AS total_bags,
+      COALESCE(SUM(s."quantityBags" * (s."ratePerBag" + s."loadingChargePerBag")), 0) AS total_sales,
+      COALESCE(SUM(s."quantityBags" * s."loadingChargePerBag"), 0)      AS total_loading,
+      MAX(s.date)                                                       AS last_sale_date
+    FROM customers c
+    JOIN pellet_sales s
+      ON s."customerId" = c.id AND s.date >= ${gte}::date AND s.date <= ${lte}::date
+    GROUP BY c.id, c.name, c.company
+    ORDER BY total_sales DESC, c.name ASC
   `;
 
   const rows = ledger.map((r) => ({
@@ -38,9 +68,16 @@ export default async function CustomersReportPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Customers</h1>
-        <p className="mt-0.5 text-sm text-neutral-500">Sales totals per customer (all time).</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Customers</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">
+            Sales per customer — {periodLabel(period).toLowerCase()}.
+          </p>
+        </div>
+        <Suspense>
+          <PeriodPicker value={period} />
+        </Suspense>
       </div>
 
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
@@ -60,7 +97,7 @@ export default async function CustomersReportPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-400">
-                    No customers yet.
+                    No sales in this period.
                   </td>
                 </tr>
               )}

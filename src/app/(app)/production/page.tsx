@@ -12,6 +12,7 @@ import { MonthPicker } from "@/components/month-picker";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
 import { ProductionForm } from "./production-forms";
+import { EnteredByCell } from "./entered-by-cell";
 import { deleteProductionDay } from "./actions";
 
 export default async function ProductionPage({
@@ -29,20 +30,30 @@ export default async function ProductionPage({
     where: { date: { gte, lte } },
     orderBy: { date: "asc" },
     include: {
-      createdBy: { select: { name: true } },
-      updatedBy: { select: { name: true } },
+      dayCreatedBy: { select: { name: true } },
+      dayUpdatedBy: { select: { name: true } },
+      nightCreatedBy: { select: { name: true } },
+      nightUpdatedBy: { select: { name: true } },
     },
   });
 
-  // Serialize Decimals to numbers
+  // Serialize Decimals to numbers and flatten the per-shift audit trail.
   const days = rows.map((r) => ({
     id: r.id,
     date: toDateInputValue(r.date),
     dayShiftBags: r.dayShiftBags.toNumber(),
     nightShiftBags: r.nightShiftBags.toNumber(),
     notes: r.notes,
-    createdByName: r.createdBy?.name ?? null,
-    updatedByName: r.updatedBy?.name ?? null,
+    dayAudit: {
+      createdByName: r.dayCreatedBy?.name ?? null,
+      updatedByName: r.dayUpdatedBy?.name ?? null,
+      updatedAt: r.dayUpdatedAt?.toISOString() ?? null,
+    },
+    nightAudit: {
+      createdByName: r.nightCreatedBy?.name ?? null,
+      updatedByName: r.nightUpdatedBy?.name ?? null,
+      updatedAt: r.nightUpdatedAt?.toISOString() ?? null,
+    },
   }));
 
   const totalDay = days.reduce((s, r) => s + r.dayShiftBags, 0);
@@ -70,7 +81,7 @@ export default async function ProductionPage({
         <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
           Add / Edit Entry
         </h2>
-        <ProductionForm defaultDate={`${month}-01`} />
+        <ProductionForm defaultMonth={month} />
       </section>
 
       {/* Table */}
@@ -117,12 +128,11 @@ export default async function ProductionPage({
                     {row.notes ?? ""}
                   </td>
                   <td className="px-4 py-3 text-xs text-neutral-500">
-                    {row.createdByName ?? "—"}
-                    {row.updatedByName && (
-                      <span className="block text-neutral-400">
-                        edited by {row.updatedByName}
-                      </span>
-                    )}
+                    <EnteredByCell
+                      date={formatDate(row.date)}
+                      day={row.dayAudit}
+                      night={row.nightAudit}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">

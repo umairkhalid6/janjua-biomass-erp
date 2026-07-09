@@ -2,13 +2,13 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
-  currentMonthParam,
   formatDate,
-  formatMonth,
   formatPKR,
-  monthRange,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
 } from "@/lib/format";
-import { MonthPicker } from "@/components/month-picker";
+import { PeriodPicker } from "@/components/period-picker";
 import { ContractorMonthlyChart } from "@/components/charts/contractor-monthly-chart";
 
 type LedgerRow = {
@@ -23,12 +23,12 @@ type MonthlyRow = { month: Date; earned: string | number; paid: string | number 
 export default async function ContractorReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const month = sp.month ?? currentMonthParam();
-  const { gte, lte } = monthRange(month);
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
   // Full ledger (ordered exactly like the view's running-balance window).
   const ledger = await prisma.$queryRaw<LedgerRow[]>`
@@ -48,8 +48,8 @@ export default async function ContractorReportPage({
   // Current total balance = last row in window order.
   const currentBalance = rows.length ? rows[rows.length - 1].balance : 0;
 
-  // Rows within the selected month, and the opening balance (last balance before the month).
-  const monthRows = rows.filter((r) => r.date >= gte && r.date <= lte);
+  // Rows within the selected window, and the opening balance (last balance before it).
+  const windowRows = rows.filter((r) => r.date >= gte && r.date <= lte);
   const before = rows.filter((r) => r.date < gte);
   const openingBalance = before.length ? before[before.length - 1].balance : 0;
 
@@ -90,10 +90,10 @@ export default async function ContractorReportPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
             Contractor Ledger (Thekadar)
           </h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{formatMonth(month)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <PeriodPicker value={period} />
         </Suspense>
       </div>
 
@@ -126,7 +126,7 @@ export default async function ContractorReportPage({
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="px-4 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Ledger — {formatMonth(month)}
+            Ledger — {periodLabel(period).toLowerCase()}
           </h2>
         </div>
         <div className="overflow-x-auto">
@@ -144,21 +144,21 @@ export default async function ContractorReportPage({
               {/* Opening balance line */}
               <tr className="bg-neutral-50 dark:bg-neutral-800/40">
                 <td className="px-4 py-2.5 text-neutral-500" colSpan={3}>
-                  Opening balance (before {formatMonth(month)})
+                  Opening balance (before this period)
                 </td>
                 <td className="px-4 py-2.5 text-right text-neutral-400">—</td>
                 <td className="px-4 py-2.5 text-right font-semibold text-neutral-700 dark:text-neutral-300">
                   {formatPKR(openingBalance)}
                 </td>
               </tr>
-              {monthRows.length === 0 && (
+              {windowRows.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-sm text-neutral-400">
-                    No ledger entries this month.
+                    No ledger entries in this period.
                   </td>
                 </tr>
               )}
-              {monthRows.map((r, i) => (
+              {windowRows.map((r, i) => (
                 <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                   <td className="px-4 py-2.5 text-neutral-700 dark:text-neutral-300">
                     {formatDate(r.date)}

@@ -1,6 +1,13 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { formatPKR } from "@/lib/format";
+import {
+  formatPKR,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
+} from "@/lib/format";
+import { PeriodPicker } from "@/components/period-picker";
 
 type SupplierRow = {
   supplier_id: string;
@@ -10,11 +17,42 @@ type SupplierRow = {
   balance_owed: string | number;
 };
 
-export default async function SuppliersReportPage() {
+export default async function SuppliersReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   await requireAdmin();
+  const sp = await searchParams;
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
+  // Purchased/paid are windowed to the period; balance_owed stays all-time
+  // (a running balance has no meaning scoped to a window). Only suppliers with
+  // activity in the window are listed.
   const ledger = await prisma.$queryRaw<SupplierRow[]>`
-    SELECT * FROM v_supplier_summary ORDER BY balance_owed DESC, name ASC
+    SELECT
+      s.id                      AS supplier_id,
+      s.name,
+      COALESCE(pur.total, 0)    AS total_purchased,
+      COALESCE(pay.total, 0)    AS total_paid,
+      ss.balance_owed           AS balance_owed
+    FROM suppliers s
+    JOIN v_supplier_summary ss ON ss.supplier_id = s.id
+    LEFT JOIN (
+      SELECT "supplierId", SUM("materialCost" + "handlingCost") AS total
+      FROM material_purchases
+      WHERE date >= ${gte}::date AND date <= ${lte}::date
+      GROUP BY 1
+    ) pur ON pur."supplierId" = s.id
+    LEFT JOIN (
+      SELECT "supplierId", SUM(amount) AS total
+      FROM supplier_payments
+      WHERE date >= ${gte}::date AND date <= ${lte}::date
+      GROUP BY 1
+    ) pay ON pay."supplierId" = s.id
+    WHERE pur.total IS NOT NULL OR pay.total IS NOT NULL
+    ORDER BY total_purchased DESC, s.name ASC
   `;
 
   const rows = ledger.map((r) => ({
@@ -31,9 +69,16 @@ export default async function SuppliersReportPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Suppliers</h1>
-        <p className="mt-0.5 text-sm text-neutral-500">Purchases, payments and balance owed (all time).</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Suppliers</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">
+            Purchases &amp; payments — {periodLabel(period).toLowerCase()}. Balance owed is all-time.
+          </p>
+        </div>
+        <Suspense>
+          <PeriodPicker value={period} />
+        </Suspense>
       </div>
 
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
@@ -44,14 +89,14 @@ export default async function SuppliersReportPage() {
                 <th className="px-4 py-3 font-medium">Supplier</th>
                 <th className="px-4 py-3 text-right font-medium">Purchased</th>
                 <th className="px-4 py-3 text-right font-medium">Paid</th>
-                <th className="px-4 py-3 text-right font-medium">Balance Owed</th>
+                <th className="px-4 py-3 text-right font-medium">Balance Owed (all-time)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-sm text-neutral-400">
-                    No suppliers yet.
+                    No supplier activity in this period.
                   </td>
                 </tr>
               )}

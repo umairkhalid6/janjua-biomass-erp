@@ -5,6 +5,7 @@ import { formatPKR } from "@/lib/format";
 import { EditDialog } from "@/components/edit-dialog";
 import { AgingBadge } from "@/components/aging-badge";
 import { CreateCustomerForm, EditCustomerForm } from "./customer-forms";
+import { DeleteCustomerButton } from "./delete-customer-button";
 
 type CustomerSummaryRow = {
   customer_id: string;
@@ -123,17 +124,23 @@ export default async function CustomersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <EditDialog title="Edit Customer">
-                        <EditCustomerForm
-                          existing={{
-                            id: c.id,
-                            name: c.name,
-                            company: c.company,
-                            phone: c.phone,
-                            openingBalance: c.openingBalance.toNumber(),
-                          }}
+                      <div className="flex items-center gap-2">
+                        <EditDialog title="Edit Customer">
+                          <EditCustomerForm
+                            existing={{
+                              id: c.id,
+                              name: c.name,
+                              company: c.company,
+                              phone: c.phone,
+                              openingBalance: c.openingBalance.toNumber(),
+                            }}
+                          />
+                        </EditDialog>
+                        <DeleteCustomerButton
+                          customerId={c.id}
+                          customerName={c.name}
                         />
-                      </EditDialog>
+                      </div>
                     </td>
                   </tr>
                 );

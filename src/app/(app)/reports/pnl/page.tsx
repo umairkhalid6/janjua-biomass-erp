@@ -2,16 +2,18 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
-  currentMonthParam,
   formatMonth,
   formatPKR,
-  parseMonthParam,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
 } from "@/lib/format";
-import { MonthPicker } from "@/components/month-picker";
+import { PeriodPicker } from "@/components/period-picker";
 import { ProfitBarChart } from "@/components/charts/profit-bar-chart";
 
-type SummaryRow = {
-  month: Date;
+// Period totals: v_monthly_summary is month-grain, so the P&L for a window is a
+// SUM over its months. avg_rate_per_bag is re-derived from period totals.
+type PnlTotalsRow = {
   sales_revenue: string | number;
   loading_charges: string | number;
   bags_sold: string | number;
@@ -29,18 +31,34 @@ type SummaryRow = {
 export default async function PnlPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const month = sp.month ?? currentMonthParam();
-  const monthDate = parseMonthParam(month);
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
   const [current, history] = await Promise.all([
-    prisma.$queryRaw<SummaryRow[]>`
-      SELECT * FROM v_monthly_summary WHERE month = ${monthDate}::date
+    prisma.$queryRaw<PnlTotalsRow[]>`
+      SELECT
+        COALESCE(SUM(sales_revenue), 0)     AS sales_revenue,
+        COALESCE(SUM(loading_charges), 0)   AS loading_charges,
+        COALESCE(SUM(bags_sold), 0)         AS bags_sold,
+        CASE WHEN SUM(bags_sold) > 0
+             THEN ROUND(SUM(sales_revenue) / SUM(bags_sold), 2)
+             ELSE 0 END                     AS avg_rate_per_bag,
+        COALESCE(SUM(bags_produced), 0)     AS bags_produced,
+        COALESCE(SUM(sawdust_cost), 0)      AS sawdust_cost,
+        COALESCE(SUM(chips_cost), 0)        AS chips_cost,
+        COALESCE(SUM(labor_cost), 0)        AS labor_cost,
+        COALESCE(SUM(expenses), 0)          AS expenses,
+        COALESCE(SUM(electricity_cost), 0)  AS electricity_cost,
+        COALESCE(SUM(total_cost), 0)        AS total_cost,
+        COALESCE(SUM(profit), 0)            AS profit
+      FROM v_monthly_summary
+      WHERE month >= ${gte}::date AND month <= ${lte}::date
     `,
-    prisma.$queryRaw<SummaryRow[]>`
+    prisma.$queryRaw<{ month: Date; profit: string | number }[]>`
       SELECT month, profit FROM v_monthly_summary ORDER BY month DESC LIMIT 12
     `,
   ]);
@@ -50,6 +68,8 @@ export default async function PnlPage({
   const sales = n(s?.sales_revenue);
   const loadingCharges = n(s?.loading_charges);
   const profit = n(s?.profit);
+  // The P&L table is empty only when the window has no activity at all.
+  const hasData = sales !== 0 || n(s?.total_cost) !== 0 || n(s?.bags_produced) !== 0;
 
   const costLines = [
     { label: "Sawdust", value: n(s?.sawdust_cost) },
@@ -75,10 +95,10 @@ export default async function PnlPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
             Profit &amp; Loss
           </h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{formatMonth(month)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <PeriodPicker value={period} />
         </Suspense>
       </div>
 
@@ -142,9 +162,9 @@ export default async function PnlPage({
             </tr>
           </tbody>
         </table>
-        {!s && (
+        {!hasData && (
           <p className="px-4 py-6 text-center text-sm text-neutral-400">
-            No data for {formatMonth(month)}.
+            No data for {periodLabel(period).toLowerCase()}.
           </p>
         )}
       </section>

@@ -2,13 +2,13 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
-  currentMonthParam,
-  formatMonth,
   formatPKR,
-  parseMonthParam,
+  parsePeriodParam,
+  periodLabel,
+  periodRange,
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
-import { MonthPicker } from "@/components/month-picker";
+import { PeriodPicker } from "@/components/period-picker";
 import {
   MaterialStackedChart,
   type MaterialStackedDatum,
@@ -25,21 +25,31 @@ type MaterialRow = {
 export default async function MaterialsReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const month = sp.month ?? currentMonthParam();
-  const monthDate = parseMonthParam(month);
+  const period = parsePeriodParam(sp.period);
+  const { gte, lte } = periodRange(period);
 
   const [current, sixMonth] = await Promise.all([
+    // Per-material totals summed across the selected window.
     prisma.$queryRaw<MaterialRow[]>`
-      SELECT * FROM v_material_totals WHERE month = ${monthDate}::date
+      SELECT
+        material_type,
+        SUM(weight_kg)   AS weight_kg,
+        SUM(total_cost)  AS total_cost,
+        CASE WHEN SUM(weight_kg) > 0
+             THEN ROUND(SUM(total_cost) / SUM(weight_kg), 2)
+             ELSE 0 END  AS avg_rate_per_kg
+      FROM v_material_totals
+      WHERE month >= ${gte}::date AND month <= ${lte}::date
+      GROUP BY material_type
     `,
+    // Trend chart is always the trailing 6 months, independent of the window.
     prisma.$queryRaw<MaterialRow[]>`
       SELECT month, material_type, total_cost FROM v_material_totals
-      WHERE month >= (${monthDate}::date - interval '5 months')
-        AND month <= ${monthDate}::date
+      WHERE month >= (date_trunc('month', now()) - interval '5 months')::date
       ORDER BY month ASC
     `,
   ]);
@@ -86,10 +96,10 @@ export default async function MaterialsReportPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Materials</h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{formatMonth(month)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <PeriodPicker value={period} />
         </Suspense>
       </div>
 
@@ -124,7 +134,7 @@ export default async function MaterialsReportPage({
         </div>
       ) : (
         <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900">
-          No material purchases in {formatMonth(month)}.
+          No material purchases in {periodLabel(period).toLowerCase()}.
         </div>
       )}
 

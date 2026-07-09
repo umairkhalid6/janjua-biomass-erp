@@ -9,8 +9,8 @@
     },
     {
       "name": "erp-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "-p", "3011"],
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "NEXT_DIST_DIR=.next-preview npm run dev -- -p 3011"],
       "port": 3011
     },
     {
@@ -18,6 +18,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3012,
+      "autoPort": true
+    },
+    {
+      "name": "erp-dev-preview2",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "NEXT_DIST_DIR=.next-preview-2 npm run dev"],
+      "port": 3013,
       "autoPort": true
     }
   ]
