@@ -8,7 +8,16 @@ import {
   periodLabel,
   periodRange,
 } from "@/lib/format";
+import {
+  bucketLabel,
+  defaultGrainBuckets,
+  grainUnit,
+  grainWindowLabel,
+  grainWindowStart,
+  parseGrainParam,
+} from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
+import { GrainPicker } from "@/components/grain-picker";
 import { ContractorMonthlyChart } from "@/components/charts/contractor-monthly-chart";
 
 type LedgerRow = {
@@ -18,17 +27,20 @@ type LedgerRow = {
   amount: string | number;
   balance: string | number;
 };
-type MonthlyRow = { month: Date; earned: string | number; paid: string | number };
+type BucketRow = { bucket: Date; earned: string | number; paid: string | number };
 
 export default async function ContractorReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
   const { gte, lte } = periodRange(period);
+  const grain = parseGrainParam(sp.grain);
+  const chartBuckets = defaultGrainBuckets(grain);
+  const chartStart = grainWindowStart(grain, chartBuckets);
 
   // Full ledger (ordered exactly like the view's running-balance window).
   const ledger = await prisma.$queryRaw<LedgerRow[]>`
@@ -53,35 +65,29 @@ export default async function ContractorReportPage({
   const before = rows.filter((r) => r.date < gte);
   const openingBalance = before.length ? before[before.length - 1].balance : 0;
 
-  // Monthly earned vs paid, last 12 months.
-  const monthly = await prisma.$queryRaw<MonthlyRow[]>`
+  // Earned vs paid bucketed at the selected grain over a trailing window.
+  const bucketed = await prisma.$queryRaw<BucketRow[]>`
     WITH e AS (
-      SELECT date_trunc('month', date)::date AS month, SUM(amount) AS earned
+      SELECT date_trunc(${grainUnit(grain)}::text, date)::date AS bucket, SUM(amount) AS earned
       FROM v_contractor_ledger WHERE entry_type = 'EARNED' GROUP BY 1
     ),
     p AS (
-      SELECT date_trunc('month', date)::date AS month, SUM(-amount) AS paid
+      SELECT date_trunc(${grainUnit(grain)}::text, date)::date AS bucket, SUM(-amount) AS paid
       FROM v_contractor_ledger WHERE entry_type = 'PAYMENT' GROUP BY 1
     )
-    SELECT COALESCE(e.month, p.month) AS month,
+    SELECT COALESCE(e.bucket, p.bucket) AS bucket,
            COALESCE(e.earned, 0) AS earned,
            COALESCE(p.paid, 0) AS paid
-    FROM e FULL OUTER JOIN p ON e.month = p.month
-    ORDER BY month DESC LIMIT 12
+    FROM e FULL OUTER JOIN p ON e.bucket = p.bucket
+    WHERE COALESCE(e.bucket, p.bucket) >= ${chartStart}::date
+    ORDER BY bucket ASC
   `;
 
-  const chartData = monthly
-    .map((r) => ({
-      month: new Date(r.month),
-      earned: Number(r.earned),
-      paid: Number(r.paid),
-    }))
-    .sort((a, b) => a.month.getTime() - b.month.getTime())
-    .map((r) => ({
-      label: r.month.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
-      earned: r.earned,
-      paid: r.paid,
-    }));
+  const chartData = bucketed.map((r) => ({
+    label: bucketLabel(grain, new Date(r.bucket)),
+    earned: Number(r.earned),
+    paid: Number(r.paid),
+  }));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -92,9 +98,14 @@ export default async function ContractorReportPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
-        <Suspense>
-          <PeriodPicker value={period} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-2">
+          <Suspense>
+            <GrainPicker value={grain} />
+          </Suspense>
+          <Suspense>
+            <PeriodPicker value={period} />
+          </Suspense>
+        </div>
       </div>
 
       {/* Current total balance banner */}
@@ -188,7 +199,7 @@ export default async function ContractorReportPage({
       {/* Earned vs paid chart */}
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Earned vs Paid (monthly)
+          Earned vs Paid ({grainWindowLabel(grain, chartBuckets)})
         </h2>
         {chartData.length > 0 ? (
           <ContractorMonthlyChart data={chartData} />

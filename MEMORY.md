@@ -364,3 +364,21 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 - **Two dev servers in one folder:** Next 16's dev lock lives in distDir, so next.config.ts now
   honors `NEXT_DIST_DIR`; launch.json's `erp-dev` runs with `NEXT_DIST_DIR=.next-preview` on port
   3011 so a preview server can run alongside the main dev server (.next-preview is gitignored).
+
+### Chart granularity switcher — daily/weekly/monthly (2026-07-09)
+- **All chart pages (dashboard, P&L, production, materials, contractor) gained a Daily / Weekly /
+  Monthly segmented control** (`GrainPicker` in components/grain-picker.tsx) driven by a `?grain=`
+  query param, independent of the existing `?period=` window. Helpers live in lib/granularity.ts:
+  grain parsing, `date_trunc` unit, trailing windows (30 days / 12 weeks / 12 months — dashboard
+  and materials keep their original 6-bucket monthly windows), UTC bucketing (`bucketStart`, weeks
+  start Monday to match Postgres `date_trunc('week')`), and axis/table labels.
+- **New view `v_daily_summary`** (migration `20260709133757_daily_summary_view`): day-grain mirror
+  of v_monthly_summary. Profit charts re-aggregate it with
+  `date_trunc(${unit}::text, day)` — one view serves all three grains. Verified it reconciles
+  per-month with v_monthly_summary.
+- **Gotcha / decision:** electricity bills have no day component, so each bill lands entirely on
+  the 1st of its month in v_daily_summary — daily/weekly profit buckets containing a month's 1st
+  carry that whole month's electricity cost.
+- Production's in-period output chart buckets its existing day rows in JS (`bucketStart`) since the
+  table needs day grain anyway; materials/contractor group their base tables in SQL. The P&L
+  history table follows the grain too (Day/Week/Month column, `bucketLabelLong` labels).

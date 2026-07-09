@@ -10,25 +10,51 @@ import {
   toDateInputValue,
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
+import { paginate, parseNumberParam } from "@/lib/pagination";
 import { MonthPicker } from "@/components/month-picker";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
+import { Pagination } from "@/components/pagination";
+import {
+  FilterRange,
+  FilterSearch,
+  FilterSelect,
+  ResetFilters,
+} from "@/components/table-filters";
 import { CreatePurchaseForm, EditPurchaseForm } from "./purchase-forms";
 import { deletePurchase } from "./actions";
 import type { MaterialType } from "@prisma/client";
 
 const MATERIAL_KEYS = Object.keys(MATERIAL_LABELS) as MaterialType[];
 
+type PurchaseSearchParams = {
+  month?: string;
+  material?: string;
+  supplier?: string;
+  minRate?: string;
+  maxRate?: string;
+  q?: string;
+  page?: string;
+};
+
 export default async function PurchasesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; material?: string }>;
+  searchParams: Promise<PurchaseSearchParams>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const material = (sp.material as MaterialType | undefined) ?? null;
   const { gte, lte } = monthRange(month);
+
+  const supplierId = sp.supplier ?? null;
+  const minRate = parseNumberParam(sp.minRate);
+  const maxRate = parseNumberParam(sp.maxRate);
+  const notesQuery = sp.q?.trim().toLowerCase() ?? "";
+  const hasFilters = Boolean(
+    supplierId || minRate !== null || maxRate !== null || notesQuery
+  );
 
   const [purchases, suppliers] = await Promise.all([
     prisma.materialPurchase.findMany({
@@ -37,7 +63,7 @@ export default async function PurchasesPage({
         ...(material ? { materialType: material } : {}),
       },
       include: { supplier: true },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
   ]);
@@ -66,11 +92,22 @@ export default async function PurchasesPage({
     };
   });
 
-  const totalKg = rows.reduce((s, r) => s + r.weightKg, 0);
-  const totalMat = rows.reduce((s, r) => s + r.materialCost, 0);
-  const totalHand = rows.reduce((s, r) => s + r.handlingCost, 0);
-  const totalAll = rows.reduce((s, r) => s + r.total, 0);
+  const filtered = rows.filter(
+    (r) =>
+      (!supplierId || r.supplierId === supplierId) &&
+      (minRate === null || r.ratePerKg >= minRate) &&
+      (maxRate === null || r.ratePerKg <= maxRate) &&
+      (!notesQuery || (r.notes ?? "").toLowerCase().includes(notesQuery))
+  );
+
+  // Totals cover every filtered row, not just the visible page.
+  const totalKg = filtered.reduce((s, r) => s + r.weightKg, 0);
+  const totalMat = filtered.reduce((s, r) => s + r.materialCost, 0);
+  const totalHand = filtered.reduce((s, r) => s + r.handlingCost, 0);
+  const totalAll = filtered.reduce((s, r) => s + r.total, 0);
   const avgRate = totalKg > 0 ? totalAll / totalKg : 0;
+
+  const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
   const supplierOptions = suppliers.map((v) => ({ id: v.id, name: v.name }));
 
@@ -93,7 +130,7 @@ export default async function PurchasesPage({
       {/* Material filter tabs */}
       <div className="flex flex-wrap gap-2">
         <Suspense>
-          <MaterialFilter current={material} />
+          <MaterialFilter current={material} searchParams={sp} />
         </Suspense>
       </div>
 
@@ -107,6 +144,34 @@ export default async function PurchasesPage({
 
       {/* Table */}
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <Suspense>
+            <FilterSelect
+              paramName="supplier"
+              value={supplierId ?? ""}
+              options={supplierOptions.map((s) => ({
+                value: s.id,
+                label: s.name,
+              }))}
+              allLabel="All suppliers"
+            />
+            <FilterRange
+              minParam="minRate"
+              maxParam="maxRate"
+              minValue={sp.minRate}
+              maxValue={sp.maxRate}
+              placeholder={["Min rate/kg", "Max rate/kg"]}
+            />
+            <FilterSearch
+              paramName="q"
+              value={sp.q ?? ""}
+              placeholder="Search notes"
+            />
+            {hasFilters && (
+              <ResetFilters params={["supplier", "minRate", "maxRate", "q"]} />
+            )}
+          </Suspense>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
@@ -123,18 +188,21 @@ export default async function PurchasesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {rows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={9}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
-                    No purchases for {formatMonth(month)}
-                    {material ? ` (${MATERIAL_LABELS[material]})` : ""}.
+                    {hasFilters
+                      ? "No purchases match the current filters."
+                      : `No purchases for ${formatMonth(month)}${
+                          material ? ` (${MATERIAL_LABELS[material]})` : ""
+                        }.`}
                   </td>
                 </tr>
               )}
-              {rows.map((row) => (
+              {pageRows.map((row) => (
                 <tr
                   key={row.id}
                   className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
@@ -189,11 +257,11 @@ export default async function PurchasesPage({
                 </tr>
               ))}
             </tbody>
-            {rows.length > 0 && (
+            {filtered.length > 0 && (
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
-                    Month Total
+                    {hasFilters ? "Filtered Total" : "Month Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {totalKg.toFixed(2)} kg
@@ -216,13 +284,34 @@ export default async function PurchasesPage({
             )}
           </table>
         </div>
+        <Suspense>
+          <Pagination page={page} pageCount={pageCount} total={total} noun="purchases" />
+        </Suspense>
       </section>
     </div>
   );
 }
 
-function MaterialFilter({ current }: { current: MaterialType | null }) {
-  // Server component — renders filter links
+function MaterialFilter({
+  current,
+  searchParams,
+}: {
+  current: MaterialType | null;
+  searchParams: PurchaseSearchParams;
+}) {
+  // Server component — renders filter links that keep the month and the other
+  // filters, but reset pagination.
+  const hrefFor = (material: MaterialType | null) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(searchParams)) {
+      if (!v || k === "material" || k === "page") continue;
+      params.set(k, v);
+    }
+    if (material) params.set("material", material);
+    const qs = params.toString();
+    return qs ? `/purchases?${qs}` : "/purchases";
+  };
+
   const base =
     "rounded-lg border px-3 py-1.5 text-xs font-medium transition";
   const active =
@@ -232,13 +321,13 @@ function MaterialFilter({ current }: { current: MaterialType | null }) {
 
   return (
     <>
-      <a href="/purchases" className={`${base} ${!current ? active : inactive}`}>
+      <a href={hrefFor(null)} className={`${base} ${!current ? active : inactive}`}>
         All
       </a>
       {MATERIAL_KEYS.map((k) => (
         <a
           key={k}
-          href={`/purchases?material=${k}`}
+          href={hrefFor(k)}
           className={`${base} ${current === k ? active : inactive}`}
         >
           {MATERIAL_LABELS[k]}

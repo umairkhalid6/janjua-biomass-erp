@@ -44,3 +44,4 @@ next-env.d.ts
 
 # preview sandbox build dir
 /.next-preview/
+/.next-preview-2

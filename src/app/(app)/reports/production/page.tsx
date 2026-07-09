@@ -9,7 +9,17 @@ import {
   periodRange,
 } from "@/lib/format";
 import { BAG_KG } from "@/lib/constants";
+import {
+  bucketLabel,
+  bucketStart,
+  defaultGrainBuckets,
+  grainUnit,
+  grainWindowLabel,
+  grainWindowStart,
+  parseGrainParam,
+} from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
+import { GrainPicker } from "@/components/grain-picker";
 import { ProductionDailyChart } from "@/components/charts/production-daily-chart";
 import { ProductionTrendChart } from "@/components/charts/production-trend-chart";
 
@@ -19,17 +29,20 @@ type DailyRow = {
   night_bags: string | number;
   labor_cost: string | number;
 };
-type TrendRow = { month: Date; total_bags: string | number };
+type TrendRow = { bucket: Date; total_bags: string | number };
 
 export default async function ProductionReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
   const { gte, lte } = periodRange(period);
+  const grain = parseGrainParam(sp.grain);
+  const trendBuckets = defaultGrainBuckets(grain);
+  const trendStart = grainWindowStart(grain, trendBuckets);
 
   const [daily, trend] = await Promise.all([
     prisma.$queryRaw<DailyRow[]>`
@@ -43,8 +56,12 @@ export default async function ProductionReportPage({
       ORDER BY p.date ASC
     `,
     prisma.$queryRaw<TrendRow[]>`
-      SELECT month, total_bags FROM v_production_summary
-      ORDER BY month DESC LIMIT 12
+      SELECT date_trunc(${grainUnit(grain)}::text, date)::date AS bucket,
+             SUM("dayShiftBags" + "nightShiftBags") AS total_bags
+      FROM production_days
+      WHERE date >= ${trendStart}::date
+      GROUP BY 1
+      ORDER BY 1 ASC
     `,
   ]);
 
@@ -73,24 +90,35 @@ export default async function ProductionReportPage({
     { dayBags: 0, nightBags: 0, total: 0, kg: 0, laborCost: 0 }
   );
 
+  // Output chart follows the selected grain: at "daily" it keeps the original
+  // per-day bars; "weekly"/"monthly" sum the day rows into wider buckets.
   // Day-only labels read cleanly for a single month; across a multi-month
   // window include the month so repeated day numbers stay distinguishable.
   const multiMonth = period !== "1m";
-  const dailyChart = rows.map((r) => ({
-    label: multiMonth
-      ? r.date.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
-      : String(r.date.getUTCDate()),
-    day: r.dayBags,
-    night: r.nightBags,
-  }));
+  const byBucket = new Map<number, { day: number; night: number }>();
+  for (const r of rows) {
+    const key = bucketStart(grain, r.date).getTime();
+    const cur = byBucket.get(key) ?? { day: 0, night: 0 };
+    cur.day += r.dayBags;
+    cur.night += r.nightBags;
+    byBucket.set(key, cur);
+  }
+  const dailyChart = Array.from(byBucket.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([time, v]) => {
+      const d = new Date(time);
+      return {
+        label:
+          grain === "daily" && !multiMonth ? String(d.getUTCDate()) : bucketLabel(grain, d),
+        day: v.day,
+        night: v.night,
+      };
+    });
 
-  const trendChart = trend
-    .map((r) => ({ month: new Date(r.month), bags: Number(r.total_bags) }))
-    .sort((a, b) => a.month.getTime() - b.month.getTime())
-    .map((r) => ({
-      label: r.month.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
-      bags: r.bags,
-    }));
+  const trendChart = trend.map((r) => ({
+    label: bucketLabel(grain, new Date(r.bucket)),
+    bags: Number(r.total_bags),
+  }));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -99,15 +127,21 @@ export default async function ProductionReportPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Production</h1>
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
-        <Suspense>
-          <PeriodPicker value={period} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-2">
+          <Suspense>
+            <GrainPicker value={grain} />
+          </Suspense>
+          <Suspense>
+            <PeriodPicker value={period} />
+          </Suspense>
+        </div>
       </div>
 
-      {/* Daily chart */}
+      {/* Output chart (bucketed by grain) */}
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Daily Output (day vs night)
+          {grain === "daily" ? "Daily" : grain === "weekly" ? "Weekly" : "Monthly"} Output (day
+          vs night)
         </h2>
         {dailyChart.length > 0 ? (
           <ProductionDailyChart data={dailyChart} />
@@ -190,7 +224,7 @@ export default async function ProductionReportPage({
       {/* Trend */}
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Production Trend (12 months)
+          Production Trend ({grainWindowLabel(grain, trendBuckets)})
         </h2>
         {trendChart.length > 0 ? (
           <ProductionTrendChart data={trendChart} />

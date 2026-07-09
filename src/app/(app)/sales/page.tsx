@@ -10,23 +10,57 @@ import {
   monthRange,
   toDateInputValue,
 } from "@/lib/format";
+import { paginate, parseNumberParam } from "@/lib/pagination";
 import { MonthPicker } from "@/components/month-picker";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
+import { Pagination } from "@/components/pagination";
+import {
+  FilterRange,
+  FilterSearch,
+  FilterSelect,
+  ResetFilters,
+} from "@/components/table-filters";
 import { CreateSaleForm, EditSaleForm } from "./sale-forms";
 import { deleteSale } from "./actions";
-import { auth } from "@/auth";
+
+const STATUS_OPTIONS = [
+  { value: "paid", label: "Paid" },
+  { value: "partial", label: "Partially paid" },
+  { value: "unpaid", label: "Unpaid" },
+];
 
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{
+    month?: string;
+    customer?: string;
+    invoice?: string;
+    status?: string;
+    min?: string;
+    max?: string;
+    page?: string;
+  }>;
 }) {
   const session = await requireUser();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const { gte, lte } = monthRange(month);
   const isAdmin = session.role === "ADMIN";
+
+  const customerId = sp.customer ?? null;
+  // Invoice search matches on digits, so "INV-00123", "00123" and "123" all work.
+  const invoiceQuery = sp.invoice?.replace(/\D/g, "") ?? "";
+  const status =
+    sp.status === "paid" || sp.status === "partial" || sp.status === "unpaid"
+      ? sp.status
+      : null;
+  const minAmount = parseNumberParam(sp.min);
+  const maxAmount = parseNumberParam(sp.max);
+  const hasFilters = Boolean(
+    customerId || invoiceQuery || status || minAmount !== null || maxAmount !== null
+  );
 
   // Admins see every sale for the month. Operators see only the sales they
   // entered themselves (scoped by createdById) — never records added by others.
@@ -36,8 +70,8 @@ export default async function SalesPage({
         date: { gte, lte },
         ...(isAdmin ? {} : { createdById: session.id }),
       },
-      include: { customer: true },
-      orderBy: { date: "asc" },
+      include: { customer: true, payments: { select: { amount: true } } },
+      orderBy: [{ date: "desc" }, { invoiceNo: "desc" }],
     }),
     prisma.customer.findMany({ orderBy: { name: "asc" } }),
   ]);
@@ -46,6 +80,8 @@ export default async function SalesPage({
     const quantityBags = s.quantityBags.toNumber();
     const ratePerBag = s.ratePerBag.toNumber(); // net pellet price
     const loadingChargePerBag = s.loadingChargePerBag.toNumber();
+    const amount = quantityBags * (ratePerBag + loadingChargePerBag);
+    const received = s.payments.reduce((sum, p) => sum + p.amount.toNumber(), 0);
     return {
       id: s.id,
       invoiceNo: s.invoiceNo,
@@ -59,10 +95,25 @@ export default async function SalesPage({
       grossRatePerBag: ratePerBag + loadingChargePerBag,
       loadingAmount: quantityBags * loadingChargePerBag,
       // Invoice total: pellets + loading (what the customer owes).
-      amount: quantityBags * (ratePerBag + loadingChargePerBag),
+      amount,
+      status:
+        amount - received <= 0.005
+          ? "paid"
+          : received > 0.005
+            ? "partial"
+            : "unpaid",
       notes: s.notes,
     };
   });
+
+  const filtered = rows.filter(
+    (r) =>
+      (!customerId || r.customerId === customerId) &&
+      (!invoiceQuery || String(r.invoiceNo).includes(invoiceQuery)) &&
+      (!status || r.status === status) &&
+      (minAmount === null || r.amount >= minAmount) &&
+      (maxAmount === null || r.amount <= maxAmount)
+  );
 
   const customerOptions = customers.map((c) => ({
     id: c.id,
@@ -70,9 +121,12 @@ export default async function SalesPage({
     company: c.company,
   }));
 
-  const totalBags = rows.reduce((s, r) => s + r.quantityBags, 0);
-  const totalLoading = rows.reduce((s, r) => s + r.loadingAmount, 0);
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
+  // Totals cover every filtered row, not just the visible page.
+  const totalBags = filtered.reduce((s, r) => s + r.quantityBags, 0);
+  const totalLoading = filtered.reduce((s, r) => s + r.loadingAmount, 0);
+  const totalAmount = filtered.reduce((s, r) => s + r.amount, 0);
+
+  const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -99,6 +153,42 @@ export default async function SalesPage({
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <Suspense>
+            <FilterSelect
+              paramName="customer"
+              value={customerId ?? ""}
+              options={customerOptions.map((c) => ({
+                value: c.id,
+                label: c.company ? `${c.name} (${c.company})` : c.name,
+              }))}
+              allLabel="All customers"
+            />
+            <FilterSelect
+              paramName="status"
+              value={status ?? ""}
+              options={STATUS_OPTIONS}
+              allLabel="All payment statuses"
+            />
+            <FilterSearch
+              paramName="invoice"
+              value={sp.invoice ?? ""}
+              placeholder="Invoice #"
+            />
+            <FilterRange
+              minParam="min"
+              maxParam="max"
+              minValue={sp.min}
+              maxValue={sp.max}
+              placeholder={["Min amount", "Max amount"]}
+            />
+            {hasFilters && (
+              <ResetFilters
+                params={["customer", "status", "invoice", "min", "max"]}
+              />
+            )}
+          </Suspense>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
@@ -114,17 +204,19 @@ export default async function SalesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {rows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={8}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
-                    No sales for {formatMonth(month)}.
+                    {hasFilters
+                      ? "No sales match the current filters."
+                      : `No sales for ${formatMonth(month)}.`}
                   </td>
                 </tr>
               )}
-              {rows.map((row) => (
+              {pageRows.map((row) => (
                 <tr
                   key={row.id}
                   className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
@@ -186,11 +278,11 @@ export default async function SalesPage({
                 </tr>
               ))}
             </tbody>
-            {rows.length > 0 && (
+            {filtered.length > 0 && (
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
-                    Month Total
+                    {hasFilters ? "Filtered Total" : "Month Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {totalBags.toFixed(2)} bags
@@ -208,6 +300,9 @@ export default async function SalesPage({
             )}
           </table>
         </div>
+        <Suspense>
+          <Pagination page={page} pageCount={pageCount} total={total} noun="sales" />
+        </Suspense>
       </section>
     </div>
   );

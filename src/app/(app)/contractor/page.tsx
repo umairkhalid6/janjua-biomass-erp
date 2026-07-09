@@ -9,7 +9,15 @@ import {
   monthRange,
   toDateInputValue,
 } from "@/lib/format";
+import { paginate, parseNumberParam } from "@/lib/pagination";
 import { MonthPicker } from "@/components/month-picker";
+import { Pagination } from "@/components/pagination";
+import {
+  FilterRange,
+  FilterSearch,
+  FilterSelect,
+  ResetFilters,
+} from "@/components/table-filters";
 import { PaymentForm, AdjustmentForm } from "./contractor-forms";
 
 type LedgerRow = {
@@ -20,15 +28,39 @@ type LedgerRow = {
   balance: string | number;
 };
 
+const ADJUSTMENT_TYPE_OPTIONS = [
+  { value: "paying", label: "Paying" },
+  { value: "receiving", label: "Receiving" },
+];
+
 export default async function ContractorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{
+    month?: string;
+    payQ?: string;
+    payMin?: string;
+    payMax?: string;
+    payPage?: string;
+    adjType?: string;
+    adjQ?: string;
+    adjPage?: string;
+  }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const { gte, lte } = monthRange(month);
+
+  const payQuery = sp.payQ?.trim().toLowerCase() ?? "";
+  const payMin = parseNumberParam(sp.payMin);
+  const payMax = parseNumberParam(sp.payMax);
+  const hasPayFilters = Boolean(payQuery || payMin !== null || payMax !== null);
+
+  const adjType =
+    sp.adjType === "paying" || sp.adjType === "receiving" ? sp.adjType : null;
+  const adjQuery = sp.adjQ?.trim().toLowerCase() ?? "";
+  const hasAdjFilters = Boolean(adjType || adjQuery);
 
   // Current balance = last row of the running-balance view (same ordering
   // as the view's window function: date, entry_type, description).
@@ -44,11 +76,11 @@ export default async function ContractorPage({
   const [payments, adjustments] = await Promise.all([
     prisma.contractorPayment.findMany({
       where: { date: { gte, lte } },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.contractorAdjustment.findMany({
       where: { date: { gte, lte } },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
   ]);
 
@@ -66,8 +98,25 @@ export default async function ContractorPage({
     reason: a.reason,
   }));
 
-  const totalPayments = paymentRows.reduce((s, r) => s + r.amount, 0);
-  const totalAdjustments = adjustmentRows.reduce((s, r) => s + r.amount, 0);
+  const filteredPayments = paymentRows.filter(
+    (r) =>
+      (!payQuery || (r.notes ?? "").toLowerCase().includes(payQuery)) &&
+      (payMin === null || r.amount >= payMin) &&
+      (payMax === null || r.amount <= payMax)
+  );
+
+  const filteredAdjustments = adjustmentRows.filter(
+    (r) =>
+      (!adjType || (adjType === "paying" ? r.amount < 0 : r.amount >= 0)) &&
+      (!adjQuery || r.reason.toLowerCase().includes(adjQuery))
+  );
+
+  // Totals cover every filtered row, not just the visible page.
+  const totalPayments = filteredPayments.reduce((s, r) => s + r.amount, 0);
+  const totalAdjustments = filteredAdjustments.reduce((s, r) => s + r.amount, 0);
+
+  const pay = paginate(filteredPayments, sp.payPage);
+  const adj = paginate(filteredAdjustments, sp.adjPage);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -143,6 +192,30 @@ export default async function ContractorPage({
             Payments — {formatMonth(month)}
           </h2>
         </div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <Suspense>
+            <FilterSearch
+              paramName="payQ"
+              value={sp.payQ ?? ""}
+              placeholder="Search notes"
+              pageParam="payPage"
+            />
+            <FilterRange
+              minParam="payMin"
+              maxParam="payMax"
+              minValue={sp.payMin}
+              maxValue={sp.payMax}
+              placeholder={["Min amount", "Max amount"]}
+              pageParam="payPage"
+            />
+            {hasPayFilters && (
+              <ResetFilters
+                params={["payQ", "payMin", "payMax"]}
+                pageParam="payPage"
+              />
+            )}
+          </Suspense>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
@@ -153,17 +226,19 @@ export default async function ContractorPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {paymentRows.length === 0 && (
+              {pay.pageRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={3}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No payments this month.
+                    {hasPayFilters
+                      ? "No payments match the current filters."
+                      : "No payments this month."}
                   </td>
                 </tr>
               )}
-              {paymentRows.map((r) => (
+              {pay.pageRows.map((r) => (
                 <tr key={r.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                   <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
                     {formatDate(r.date)}
@@ -177,7 +252,7 @@ export default async function ContractorPage({
                 </tr>
               ))}
             </tbody>
-            {paymentRows.length > 0 && (
+            {filteredPayments.length > 0 && (
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
@@ -192,6 +267,15 @@ export default async function ContractorPage({
             )}
           </table>
         </div>
+        <Suspense>
+          <Pagination
+            page={pay.page}
+            pageCount={pay.pageCount}
+            total={pay.total}
+            paramName="payPage"
+            noun="payments"
+          />
+        </Suspense>
       </section>
 
       {/* Adjustments table */}
@@ -200,6 +284,26 @@ export default async function ContractorPage({
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
             Adjustments — {formatMonth(month)}
           </h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <Suspense>
+            <FilterSelect
+              paramName="adjType"
+              value={adjType ?? ""}
+              options={ADJUSTMENT_TYPE_OPTIONS}
+              allLabel="All types"
+              pageParam="adjPage"
+            />
+            <FilterSearch
+              paramName="adjQ"
+              value={sp.adjQ ?? ""}
+              placeholder="Search reasons"
+              pageParam="adjPage"
+            />
+            {hasAdjFilters && (
+              <ResetFilters params={["adjType", "adjQ"]} pageParam="adjPage" />
+            )}
+          </Suspense>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -212,17 +316,19 @@ export default async function ContractorPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {adjustmentRows.length === 0 && (
+              {adj.pageRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={4}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No adjustments this month.
+                    {hasAdjFilters
+                      ? "No adjustments match the current filters."
+                      : "No adjustments this month."}
                   </td>
                 </tr>
               )}
-              {adjustmentRows.map((r) => (
+              {adj.pageRows.map((r) => (
                 <tr key={r.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                   <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
                     {formatDate(r.date)}
@@ -247,7 +353,7 @@ export default async function ContractorPage({
                 </tr>
               ))}
             </tbody>
-            {adjustmentRows.length > 0 && (
+            {filteredAdjustments.length > 0 && (
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td
@@ -266,6 +372,15 @@ export default async function ContractorPage({
             )}
           </table>
         </div>
+        <Suspense>
+          <Pagination
+            page={adj.page}
+            pageCount={adj.pageCount}
+            total={adj.total}
+            paramName="adjPage"
+            noun="adjustments"
+          />
+        </Suspense>
       </section>
     </div>
   );

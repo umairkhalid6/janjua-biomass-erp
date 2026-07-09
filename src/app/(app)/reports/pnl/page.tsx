@@ -2,13 +2,22 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
-  formatMonth,
   formatPKR,
   parsePeriodParam,
   periodLabel,
   periodRange,
 } from "@/lib/format";
+import {
+  bucketLabel,
+  bucketLabelLong,
+  defaultGrainBuckets,
+  grainUnit,
+  grainWindowLabel,
+  grainWindowStart,
+  parseGrainParam,
+} from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
+import { GrainPicker } from "@/components/grain-picker";
 import { ProfitBarChart } from "@/components/charts/profit-bar-chart";
 
 // Period totals: v_monthly_summary is month-grain, so the P&L for a window is a
@@ -31,12 +40,15 @@ type PnlTotalsRow = {
 export default async function PnlPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
   const { gte, lte } = periodRange(period);
+  const grain = parseGrainParam(sp.grain);
+  const historyBuckets = defaultGrainBuckets(grain);
+  const historyStart = grainWindowStart(grain, historyBuckets);
 
   const [current, history] = await Promise.all([
     prisma.$queryRaw<PnlTotalsRow[]>`
@@ -58,8 +70,13 @@ export default async function PnlPage({
       FROM v_monthly_summary
       WHERE month >= ${gte}::date AND month <= ${lte}::date
     `,
-    prisma.$queryRaw<{ month: Date; profit: string | number }[]>`
-      SELECT month, profit FROM v_monthly_summary ORDER BY month DESC LIMIT 12
+    prisma.$queryRaw<{ bucket: Date; profit: string | number }[]>`
+      SELECT date_trunc(${grainUnit(grain)}::text, day)::date AS bucket,
+             SUM(profit) AS profit
+      FROM v_daily_summary
+      WHERE day >= ${historyStart}::date
+      GROUP BY 1
+      ORDER BY 1 ASC
     `,
   ]);
 
@@ -79,14 +96,17 @@ export default async function PnlPage({
     { label: "Electricity", value: n(s?.electricity_cost) },
   ];
 
-  const historyRows = history
-    .map((r) => ({ month: new Date(r.month), profit: n(r.profit) }))
-    .sort((a, b) => a.month.getTime() - b.month.getTime());
+  const historyRows = history.map((r) => ({
+    bucket: new Date(r.bucket),
+    profit: n(r.profit),
+  }));
 
   const chartData = historyRows.map((r) => ({
-    label: r.month.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+    label: bucketLabel(grain, r.bucket),
     profit: r.profit,
   }));
+
+  const grainNoun = grain === "daily" ? "Day" : grain === "weekly" ? "Week" : "Month";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -97,9 +117,14 @@ export default async function PnlPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
-        <Suspense>
-          <PeriodPicker value={period} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-2">
+          <Suspense>
+            <GrainPicker value={grain} />
+          </Suspense>
+          <Suspense>
+            <PeriodPicker value={period} />
+          </Suspense>
+        </div>
       </div>
 
       {/* P&L table */}
@@ -172,7 +197,7 @@ export default async function PnlPage({
       {/* Profit chart */}
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Monthly Profit
+          Profit — {grainWindowLabel(grain, historyBuckets)}
         </h2>
         {chartData.length > 0 ? (
           <ProfitBarChart data={chartData} />
@@ -185,14 +210,14 @@ export default async function PnlPage({
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="px-4 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Profit History (12 months)
+            Profit History ({grainWindowLabel(grain, historyBuckets)})
           </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
               <tr>
-                <th className="px-4 py-3 font-medium">Month</th>
+                <th className="px-4 py-3 font-medium">{grainNoun}</th>
                 <th className="px-4 py-3 text-right font-medium">Profit</th>
               </tr>
             </thead>
@@ -205,9 +230,9 @@ export default async function PnlPage({
                 </tr>
               )}
               {[...historyRows].reverse().map((r) => (
-                <tr key={r.month.toISOString()} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                <tr key={r.bucket.toISOString()} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                   <td className="px-4 py-2.5 text-neutral-700 dark:text-neutral-300">
-                    {formatMonth(r.month)}
+                    {bucketLabelLong(grain, r.bucket)}
                   </td>
                   <td
                     className={`px-4 py-2.5 text-right font-medium ${

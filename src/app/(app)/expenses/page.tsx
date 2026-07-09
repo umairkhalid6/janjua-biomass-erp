@@ -9,26 +9,49 @@ import {
   monthRange,
   toDateInputValue,
 } from "@/lib/format";
+import { paginate, parseNumberParam } from "@/lib/pagination";
 import { MonthPicker } from "@/components/month-picker";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
+import { Pagination } from "@/components/pagination";
+import {
+  FilterRange,
+  FilterSearch,
+  FilterSelect,
+  ResetFilters,
+} from "@/components/table-filters";
 import { CreateExpenseForm, EditExpenseForm } from "./expense-forms";
 import { deleteExpense } from "./actions";
 
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{
+    month?: string;
+    category?: string;
+    q?: string;
+    min?: string;
+    max?: string;
+    page?: string;
+  }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const { gte, lte } = monthRange(month);
 
+  const category = sp.category ?? null;
+  const itemQuery = sp.q?.trim().toLowerCase() ?? "";
+  const minAmount = parseNumberParam(sp.min);
+  const maxAmount = parseNumberParam(sp.max);
+  const hasFilters = Boolean(
+    category || itemQuery || minAmount !== null || maxAmount !== null
+  );
+
   const [expenses, allCategories] = await Promise.all([
     prisma.expense.findMany({
       where: { date: { gte, lte } },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.expense.findMany({
       select: { category: true },
@@ -45,8 +68,19 @@ export default async function ExpensesPage({
     category: e.category,
   }));
 
+  const filtered = rows.filter(
+    (r) =>
+      (!category || r.category === category) &&
+      (!itemQuery || r.item.toLowerCase().includes(itemQuery)) &&
+      (minAmount === null || r.amount >= minAmount) &&
+      (maxAmount === null || r.amount <= maxAmount)
+  );
+
   const categories = allCategories.map((c) => c.category);
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
+  // Total covers every filtered row, not just the visible page.
+  const totalAmount = filtered.reduce((s, r) => s + r.amount, 0);
+
+  const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -72,6 +106,31 @@ export default async function ExpensesPage({
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <Suspense>
+            <FilterSelect
+              paramName="category"
+              value={category ?? ""}
+              options={categories.map((c) => ({ value: c, label: c }))}
+              allLabel="All categories"
+            />
+            <FilterSearch
+              paramName="q"
+              value={sp.q ?? ""}
+              placeholder="Search items"
+            />
+            <FilterRange
+              minParam="min"
+              maxParam="max"
+              minValue={sp.min}
+              maxValue={sp.max}
+              placeholder={["Min amount", "Max amount"]}
+            />
+            {hasFilters && (
+              <ResetFilters params={["category", "q", "min", "max"]} />
+            )}
+          </Suspense>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
@@ -84,17 +143,19 @@ export default async function ExpensesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {rows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={5}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
-                    No expenses for {formatMonth(month)}.
+                    {hasFilters
+                      ? "No expenses match the current filters."
+                      : `No expenses for ${formatMonth(month)}.`}
                   </td>
                 </tr>
               )}
-              {rows.map((row) => (
+              {pageRows.map((row) => (
                 <tr
                   key={row.id}
                   className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
@@ -127,11 +188,11 @@ export default async function ExpensesPage({
                 </tr>
               ))}
             </tbody>
-            {rows.length > 0 && (
+            {filtered.length > 0 && (
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
-                    Month Total
+                    {hasFilters ? "Filtered Total" : "Month Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {formatPKR(totalAmount)}
@@ -142,6 +203,9 @@ export default async function ExpensesPage({
             )}
           </table>
         </div>
+        <Suspense>
+          <Pagination page={page} pageCount={pageCount} total={total} noun="expenses" />
+        </Suspense>
       </section>
     </div>
   );

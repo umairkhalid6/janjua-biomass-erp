@@ -9,7 +9,16 @@ import {
   periodLabel,
   periodRange,
 } from "@/lib/format";
+import {
+  bucketLabel,
+  defaultGrainBuckets,
+  grainUnit,
+  grainWindowLabel,
+  grainWindowStart,
+  parseGrainParam,
+} from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
+import { GrainPicker } from "@/components/grain-picker";
 import { ProfitTrendChart } from "@/components/charts/profit-trend-chart";
 
 // Period totals: v_monthly_summary is month-grain, so a window is just a SUM
@@ -30,7 +39,7 @@ type LedgerBalanceRow = { balance: string | number };
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string }>;
 }) {
   const user = await requireUser();
   // Dashboard is ADMIN-only. Operators are bounced to /production (middleware
@@ -39,6 +48,11 @@ export default async function DashboardPage({
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
   const { gte, lte } = periodRange(period);
+  const grain = parseGrainParam(sp.grain);
+  // Keep the monthly trend at its original 6-month window; day/week grains
+  // use the standard trailing windows (30 days / 12 weeks).
+  const trendBuckets = grain === "monthly" ? 6 : defaultGrainBuckets(grain);
+  const trendStart = grainWindowStart(grain, trendBuckets);
 
   // --- ADMIN dashboard ---
   const [summaryRows, balanceRows, trendRows] = await Promise.all([
@@ -61,10 +75,13 @@ export default async function DashboardPage({
       ORDER BY date DESC, entry_type DESC, description DESC
       LIMIT 1
     `,
-    prisma.$queryRaw<{ month: Date; profit: string | number }[]>`
-      SELECT month, profit FROM v_monthly_summary
-      WHERE month >= (date_trunc('month', now()) - interval '5 months')::date
-      ORDER BY month ASC
+    prisma.$queryRaw<{ bucket: Date; profit: string | number }[]>`
+      SELECT date_trunc(${grainUnit(grain)}::text, day)::date AS bucket,
+             SUM(profit) AS profit
+      FROM v_daily_summary
+      WHERE day >= ${trendStart}::date
+      GROUP BY 1
+      ORDER BY 1 ASC
     `,
   ]);
 
@@ -82,7 +99,7 @@ export default async function DashboardPage({
   const contractorBalance = balanceRows.length ? Number(balanceRows[0].balance) : 0;
 
   const trend = trendRows.map((r) => ({
-    label: shortMonth(r.month),
+    label: bucketLabel(grain, r.bucket),
     profit: Number(r.profit),
   }));
 
@@ -138,9 +155,14 @@ export default async function DashboardPage({
         </div>
 
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 lg:col-span-2">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Profit — last 6 months
-          </p>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Profit — {grainWindowLabel(grain, trendBuckets)}
+            </p>
+            <Suspense>
+              <GrainPicker value={grain} />
+            </Suspense>
+          </div>
           {trend.length > 0 ? (
             <ProfitTrendChart data={trend} />
           ) : (
@@ -211,8 +233,4 @@ function EmptyChart() {
       No data yet.
     </div>
   );
-}
-
-function shortMonth(month: Date): string {
-  return new Date(month).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 }

@@ -8,31 +8,48 @@ import {
   periodRange,
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
+import {
+  bucketLabel,
+  defaultGrainBuckets,
+  grainUnit,
+  grainWindowLabel,
+  grainWindowStart,
+  parseGrainParam,
+} from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
+import { GrainPicker } from "@/components/grain-picker";
 import {
   MaterialStackedChart,
   type MaterialStackedDatum,
 } from "@/components/charts/material-stacked-chart";
 
 type MaterialRow = {
-  month: Date;
   material_type: string;
   weight_kg: string | number;
   total_cost: string | number;
   avg_rate_per_kg: string | number;
 };
+type TrendRow = {
+  bucket: Date;
+  material_type: string;
+  total_cost: string | number;
+};
 
 export default async function MaterialsReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
   const { gte, lte } = periodRange(period);
+  const grain = parseGrainParam(sp.grain);
+  // Monthly keeps the original 6-month window; day/week use 30 days / 12 weeks.
+  const trendBuckets = grain === "monthly" ? 6 : defaultGrainBuckets(grain);
+  const trendStart = grainWindowStart(grain, trendBuckets);
 
-  const [current, sixMonth] = await Promise.all([
+  const [current, trendRows] = await Promise.all([
     // Per-material totals summed across the selected window.
     prisma.$queryRaw<MaterialRow[]>`
       SELECT
@@ -46,11 +63,16 @@ export default async function MaterialsReportPage({
       WHERE month >= ${gte}::date AND month <= ${lte}::date
       GROUP BY material_type
     `,
-    // Trend chart is always the trailing 6 months, independent of the window.
-    prisma.$queryRaw<MaterialRow[]>`
-      SELECT month, material_type, total_cost FROM v_material_totals
-      WHERE month >= (date_trunc('month', now()) - interval '5 months')::date
-      ORDER BY month ASC
+    // Trend chart covers a trailing window at the selected grain, independent
+    // of the period window above.
+    prisma.$queryRaw<TrendRow[]>`
+      SELECT date_trunc(${grainUnit(grain)}::text, date)::date AS bucket,
+             "materialType" AS material_type,
+             SUM("materialCost" + "handlingCost") AS total_cost
+      FROM material_purchases
+      WHERE date >= ${trendStart}::date
+      GROUP BY 1, 2
+      ORDER BY 1 ASC
     `,
   ]);
 
@@ -67,27 +89,25 @@ export default async function MaterialsReportPage({
   const totalWeight = cards.reduce((s, c) => s + c.weight, 0);
   const totalCost = cards.reduce((s, c) => s + c.cost, 0);
 
-  // Build stacked chart: one series per material type present in the 6-month window.
-  const typesPresent = Array.from(new Set(sixMonth.map((r) => r.material_type)));
+  // Build stacked chart: one series per material type present in the window.
+  const typesPresent = Array.from(new Set(trendRows.map((r) => r.material_type)));
   const series = typesPresent.map((t) => ({
     key: t,
     label: MATERIAL_LABELS[t] ?? t,
   }));
 
-  const byMonth = new Map<string, MaterialStackedDatum>();
-  for (const r of sixMonth) {
-    const d = new Date(r.month);
-    const key = d.toISOString().slice(0, 7);
-    if (!byMonth.has(key)) {
-      const base: MaterialStackedDatum = {
-        label: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
-      };
+  const byBucket = new Map<string, MaterialStackedDatum>();
+  for (const r of trendRows) {
+    const d = new Date(r.bucket);
+    const key = d.toISOString().slice(0, 10);
+    if (!byBucket.has(key)) {
+      const base: MaterialStackedDatum = { label: bucketLabel(grain, d) };
       for (const t of typesPresent) base[t] = 0;
-      byMonth.set(key, base);
+      byBucket.set(key, base);
     }
-    byMonth.get(key)![r.material_type] = Number(r.total_cost);
+    byBucket.get(key)![r.material_type] = Number(r.total_cost);
   }
-  const chartData = Array.from(byMonth.entries())
+  const chartData = Array.from(byBucket.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([, v]) => v);
 
@@ -98,9 +118,14 @@ export default async function MaterialsReportPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Materials</h1>
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
-        <Suspense>
-          <PeriodPicker value={period} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-2">
+          <Suspense>
+            <GrainPicker value={grain} />
+          </Suspense>
+          <Suspense>
+            <PeriodPicker value={period} />
+          </Suspense>
+        </div>
       </div>
 
       {/* Per-material cards */}
@@ -182,10 +207,10 @@ export default async function MaterialsReportPage({
         </section>
       )}
 
-      {/* 6-month stacked chart */}
+      {/* Trailing stacked chart at the selected grain */}
       <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Material Cost (6 months)
+          Material Cost ({grainWindowLabel(grain, trendBuckets)})
         </h2>
         {chartData.length > 0 ? (
           <MaterialStackedChart data={chartData} series={series} />
