@@ -382,3 +382,29 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 - Production's in-period output chart buckets its existing day rows in JS (`bucketStart`) since the
   table needs day grain anyway; materials/contractor group their base tables in SQL. The P&L
   history table follows the grain too (Day/Week/Month column, `bucketLabelLong` labels).
+
+### List-page pagination, filters, newest-first sort (2026-07-09)
+- **All seven list pages (sales, production, purchases, expenses, customers, suppliers,
+  contractor) now sort newest-first, paginate at 10 rows, and carry per-table filters** driven
+  entirely by URL query params (shareable/bookmarkable; no client table state). Shared pieces:
+  `lib/pagination.ts` (PAGE_SIZE=10, `paginate()` clamps stale page numbers, `parseNumberParam`),
+  `components/pagination.tsx` (Prev/Next pager, hidden when one page, custom `paramName` lets the
+  contractor page paginate payments/adjustments independently via `payPage`/`adjPage`), and
+  `components/table-filters.tsx` (FilterSelect, debounced FilterSearch/FilterRange, ResetFilters —
+  every change deletes the page param so filters land on page 1).
+- **Design decision:** pages fetch the whole month (or master list) and filter/paginate in JS —
+  datasets are one month deep, and computed fields (sale amount, payment status from
+  `payments` sum, purchase rate/kg fallback, customer aging from the summary view) can't be
+  filtered in SQL anyway. Footer totals cover ALL filtered rows, not the visible page; label
+  switches "Month Total" → "Filtered Total" when filters are active.
+- Filters per page: sales customer/status(paid|partial|unpaid)/invoice-digits/amount-range;
+  production shift/entered-by(any of the 6 audit ids)/notes; purchases supplier/rate-range/notes
+  (material tabs now preserve month + other params); expenses category/item/amount-range;
+  customers q/balance(owes|clear|credit)/aging(30|60|90, no-activity = infinitely overdue)/sort;
+  suppliers q/balance/sort; contractor payQ/payMin/payMax + adjType(paying|receiving)/adjQ.
+- **Verify gotcha:** in the preview browser, streamed Suspense content can sit hidden
+  (`<!--$~--><template>` + hidden `S:n` divs) because React 19's batched reveal ($RV) waits on an
+  animation frame that headless tabs don't fire until something forces a frame (a screenshot
+  does). Real browsers are unaffected. Also preview_fill/synthetic events don't reach React —
+  invoke `el[__reactProps$...].onChange/onClick` instead. Filter controls carry aria-labels
+  (added for a11y + testability).
