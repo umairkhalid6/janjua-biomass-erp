@@ -10,16 +10,14 @@ import {
   periodRange,
 } from "@/lib/format";
 import {
-  bucketLabel,
   defaultGrainBuckets,
   grainUnit,
-  grainWindowLabel,
   grainWindowStart,
   parseGrainParam,
 } from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
-import { GrainPicker } from "@/components/grain-picker";
-import { ProfitTrendChart } from "@/components/charts/profit-trend-chart";
+import { GrainScope } from "@/components/grain-scope";
+import { DashboardProfitSection } from "@/components/chart-sections/dashboard-profit-section";
 
 // Period totals: v_monthly_summary is month-grain, so a window is just a SUM
 // over the months in range. Postgres numerics arrive as strings via pg.
@@ -99,7 +97,7 @@ export default async function DashboardPage({
   const contractorBalance = balanceRows.length ? Number(balanceRows[0].balance) : 0;
 
   const trend = trendRows.map((r) => ({
-    label: bucketLabel(grain, r.bucket),
+    bucket: new Date(r.bucket).toISOString(),
     profit: Number(r.profit),
   }));
 
@@ -154,21 +152,9 @@ export default async function DashboardPage({
           </Link>
         </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 lg:col-span-2">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Profit — {grainWindowLabel(grain, trendBuckets)}
-            </p>
-            <Suspense>
-              <GrainPicker value={grain} />
-            </Suspense>
-          </div>
-          {trend.length > 0 ? (
-            <ProfitTrendChart data={trend} />
-          ) : (
-            <EmptyChart />
-          )}
-        </div>
+        <GrainScope initialGrain={grain}>
+          <DashboardProfitSection initialData={trend} />
+        </GrainScope>
       </div>
 
       {/* Quick links */}
@@ -224,13 +210,5 @@ function QuickLink({ href, label }: { href: string; label: string }) {
     >
       {label}
     </Link>
-  );
-}
-
-function EmptyChart() {
-  return (
-    <div className="flex h-[200px] items-center justify-center text-sm text-neutral-400">
-      No data yet.
-    </div>
   );
 }

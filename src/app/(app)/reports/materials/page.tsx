@@ -9,19 +9,14 @@ import {
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
 import {
-  bucketLabel,
   defaultGrainBuckets,
   grainUnit,
-  grainWindowLabel,
   grainWindowStart,
   parseGrainParam,
 } from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
-import { GrainPicker } from "@/components/grain-picker";
-import {
-  MaterialStackedChart,
-  type MaterialStackedDatum,
-} from "@/components/charts/material-stacked-chart";
+import { GrainScope, ScopedGrainPicker } from "@/components/grain-scope";
+import { MaterialTrendSection } from "@/components/chart-sections/material-trend-section";
 
 type MaterialRow = {
   material_type: string;
@@ -89,29 +84,16 @@ export default async function MaterialsReportPage({
   const totalWeight = cards.reduce((s, c) => s + c.weight, 0);
   const totalCost = cards.reduce((s, c) => s + c.cost, 0);
 
-  // Build stacked chart: one series per material type present in the window.
-  const typesPresent = Array.from(new Set(trendRows.map((r) => r.material_type)));
-  const series = typesPresent.map((t) => ({
-    key: t,
-    label: MATERIAL_LABELS[t] ?? t,
+  // Stacked series are built client-side in MaterialTrendSection so a grain
+  // flip refetches only these rows.
+  const trendData = trendRows.map((r) => ({
+    bucket: new Date(r.bucket).toISOString(),
+    materialType: r.material_type,
+    cost: Number(r.total_cost),
   }));
 
-  const byBucket = new Map<string, MaterialStackedDatum>();
-  for (const r of trendRows) {
-    const d = new Date(r.bucket);
-    const key = d.toISOString().slice(0, 10);
-    if (!byBucket.has(key)) {
-      const base: MaterialStackedDatum = { label: bucketLabel(grain, d) };
-      for (const t of typesPresent) base[t] = 0;
-      byBucket.set(key, base);
-    }
-    byBucket.get(key)![r.material_type] = Number(r.total_cost);
-  }
-  const chartData = Array.from(byBucket.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([, v]) => v);
-
   return (
+    <GrainScope initialGrain={grain}>
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -119,9 +101,7 @@ export default async function MaterialsReportPage({
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Suspense>
-            <GrainPicker value={grain} />
-          </Suspense>
+          <ScopedGrainPicker />
           <Suspense>
             <PeriodPicker value={period} />
           </Suspense>
@@ -208,16 +188,8 @@ export default async function MaterialsReportPage({
       )}
 
       {/* Trailing stacked chart at the selected grain */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Material Cost ({grainWindowLabel(grain, trendBuckets)})
-        </h2>
-        {chartData.length > 0 ? (
-          <MaterialStackedChart data={chartData} series={series} />
-        ) : (
-          <p className="py-8 text-center text-sm text-neutral-400">No history yet.</p>
-        )}
-      </section>
+      <MaterialTrendSection initialData={trendData} />
     </div>
+    </GrainScope>
   );
 }

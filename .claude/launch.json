@@ -21,6 +21,12 @@
       "autoPort": true
     },
     {
+      "name": "erp-dev-localauth",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "AUTH_URL=http://localhost:3015 NEXT_DIST_DIR=.next-preview npm run dev -- -p 3015"],
+      "port": 3015
+    },
+    {
       "name": "erp-dev-preview2",
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "NEXT_DIST_DIR=.next-preview-2 npm run dev"],

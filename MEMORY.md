@@ -408,3 +408,28 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   does). Real browsers are unaffected. Also preview_fill/synthetic events don't reach React —
   invoke `el[__reactProps$...].onChange/onClick` instead. Filter controls carry aria-labels
   (added for a11y + testability).
+
+### Grain flips no longer reload the page — per-chart refetch (2026-07-11)
+- **Problem (seen in the mobile PWA):** GrainPicker/`?grain=` used `router.push`, so every
+  daily/weekly/monthly flip re-rendered the whole server page — all Prisma queries re-ran and the
+  page visibly reloaded/scrolled. Fixed on all five grain pages (dashboard, production, P&L,
+  materials, contractor).
+- **Architecture:** grain is now client state in `components/grain-scope.tsx` (`GrainScope`
+  provider + `ScopedGrainPicker` + `useGrainData`). The picker writes `?grain=` with
+  `window.history.replaceState` (Next's shallow history support keeps the URL shareable and the
+  server still reads it for the initial render on deep links/reloads) — no navigation happens.
+  Each grain-dependent chart is a client section in `components/chart-sections/` seeded with
+  server-rendered initial data; on flip, `useGrainData` calls a server action in
+  `app/(app)/chart-actions.ts` (requireAdmin + `parseGrainParam` revalidation, returns ISO bucket
+  strings; labels re-derived client-side) inside `useTransition`, dimming the chart while pending.
+  `GrainPicker` itself is now purely presentational (`value`/`onChange`).
+- Production's output chart re-buckets its existing period rows entirely client-side — zero
+  refetch. The P&L history table moved into the chart section since it follows the grain too.
+  PeriodPicker keeps `router.push` on purpose: period changes the whole page's tables/cards, so a
+  server re-render is semantically correct there; it preserves the client-set `?grain=` because it
+  copies current searchParams (replaceState updates them).
+- **Verify gotchas:** `.env`'s `AUTH_URL=http://192.168.100.75:3010` makes auth redirects bounce a
+  localhost dev server to the Docker app — added `erp-dev-localauth` launch config (port 3015,
+  `AUTH_URL=http://localhost:3015`). preview_click/preview_fill synthetic events still don't reach
+  React handlers — drive via `preview_eval` (`el.click()` / `form.requestSubmit()` / native value
+  setter + dispatched change event).

@@ -1,33 +1,18 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
-import { GRAIN_OPTIONS } from "@/lib/granularity";
+import { GRAIN_OPTIONS, type Grain } from "@/lib/granularity";
 
 interface GrainPickerProps {
-  value: string; // one of GRAIN_OPTIONS values, e.g. "monthly"
-  paramName?: string;
+  value: Grain;
+  onChange: (grain: Grain) => void;
 }
 
 /**
- * Daily / Weekly / Monthly segmented control that drives chart bucketing via a
- * `?grain=` query param. Same URL-push behaviour as PeriodPicker so the page
- * re-renders server-side with re-aggregated chart data.
+ * Daily / Weekly / Monthly segmented control. Purely presentational — state
+ * lives in the surrounding GrainScope (see grain-scope.tsx), which refetches
+ * only the affected chart data instead of re-rendering the whole page.
  */
-export function GrainPicker({ value, paramName = "grain" }: GrainPickerProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const setGrain = useCallback(
-    (grain: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set(paramName, grain);
-      router.push(`${pathname}?${params.toString()}`);
-    },
-    [router, pathname, searchParams, paramName]
-  );
-
+export function GrainPicker({ value, onChange }: GrainPickerProps) {
   return (
     <div
       role="group"
@@ -38,7 +23,7 @@ export function GrainPicker({ value, paramName = "grain" }: GrainPickerProps) {
         <button
           key={o.value}
           type="button"
-          onClick={() => setGrain(o.value)}
+          onClick={() => onChange(o.value)}
           className={`px-2.5 py-1.5 text-xs font-medium transition ${
             i > 0 ? "border-l border-neutral-300 dark:border-neutral-700" : ""
           } ${

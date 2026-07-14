@@ -8,17 +8,14 @@ import {
   periodRange,
 } from "@/lib/format";
 import {
-  bucketLabel,
-  bucketLabelLong,
   defaultGrainBuckets,
   grainUnit,
-  grainWindowLabel,
   grainWindowStart,
   parseGrainParam,
 } from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
-import { GrainPicker } from "@/components/grain-picker";
-import { ProfitBarChart } from "@/components/charts/profit-bar-chart";
+import { GrainScope, ScopedGrainPicker } from "@/components/grain-scope";
+import { PnlHistorySection } from "@/components/chart-sections/pnl-history-section";
 
 // Period totals: v_monthly_summary is month-grain, so the P&L for a window is a
 // SUM over its months. avg_rate_per_bag is re-derived from period totals.
@@ -96,19 +93,13 @@ export default async function PnlPage({
     { label: "Electricity", value: n(s?.electricity_cost) },
   ];
 
-  const historyRows = history.map((r) => ({
-    bucket: new Date(r.bucket),
+  const historyData = history.map((r) => ({
+    bucket: new Date(r.bucket).toISOString(),
     profit: n(r.profit),
   }));
 
-  const chartData = historyRows.map((r) => ({
-    label: bucketLabel(grain, r.bucket),
-    profit: r.profit,
-  }));
-
-  const grainNoun = grain === "daily" ? "Day" : grain === "weekly" ? "Week" : "Month";
-
   return (
+    <GrainScope initialGrain={grain}>
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -118,9 +109,7 @@ export default async function PnlPage({
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Suspense>
-            <GrainPicker value={grain} />
-          </Suspense>
+          <ScopedGrainPicker />
           <Suspense>
             <PeriodPicker value={period} />
           </Suspense>
@@ -194,59 +183,9 @@ export default async function PnlPage({
         )}
       </section>
 
-      {/* Profit chart */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Profit — {grainWindowLabel(grain, historyBuckets)}
-        </h2>
-        {chartData.length > 0 ? (
-          <ProfitBarChart data={chartData} />
-        ) : (
-          <p className="py-8 text-center text-sm text-neutral-400">No history yet.</p>
-        )}
-      </section>
-
-      {/* 12-month history */}
-      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="px-4 pt-4 pb-2">
-          <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Profit History ({grainWindowLabel(grain, historyBuckets)})
-          </h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
-              <tr>
-                <th className="px-4 py-3 font-medium">{grainNoun}</th>
-                <th className="px-4 py-3 text-right font-medium">Profit</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-              {historyRows.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="px-4 py-6 text-center text-sm text-neutral-400">
-                    No history yet.
-                  </td>
-                </tr>
-              )}
-              {[...historyRows].reverse().map((r) => (
-                <tr key={r.bucket.toISOString()} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                  <td className="px-4 py-2.5 text-neutral-700 dark:text-neutral-300">
-                    {bucketLabelLong(grain, r.bucket)}
-                  </td>
-                  <td
-                    className={`px-4 py-2.5 text-right font-medium ${
-                      r.profit >= 0 ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {formatPKR(r.profit)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {/* Profit chart + history table (follow the grain picker) */}
+      <PnlHistorySection initialData={historyData} />
     </div>
+    </GrainScope>
   );
 }

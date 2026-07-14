@@ -10,18 +10,15 @@ import {
 } from "@/lib/format";
 import { BAG_KG } from "@/lib/constants";
 import {
-  bucketLabel,
-  bucketStart,
   defaultGrainBuckets,
   grainUnit,
-  grainWindowLabel,
   grainWindowStart,
   parseGrainParam,
 } from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
-import { GrainPicker } from "@/components/grain-picker";
-import { ProductionDailyChart } from "@/components/charts/production-daily-chart";
-import { ProductionTrendChart } from "@/components/charts/production-trend-chart";
+import { GrainScope, ScopedGrainPicker } from "@/components/grain-scope";
+import { ProductionOutputSection } from "@/components/chart-sections/production-output-section";
+import { ProductionTrendSection } from "@/components/chart-sections/production-trend-section";
 
 type DailyRow = {
   date: Date;
@@ -91,36 +88,23 @@ export default async function ProductionReportPage({
   );
 
   // Output chart follows the selected grain: at "daily" it keeps the original
-  // per-day bars; "weekly"/"monthly" sum the day rows into wider buckets.
-  // Day-only labels read cleanly for a single month; across a multi-month
-  // window include the month so repeated day numbers stay distinguishable.
+  // per-day bars; "weekly"/"monthly" sum the day rows into wider buckets. The
+  // bucketing happens client-side in ProductionOutputSection so flipping the
+  // grain needs no refetch — the period's day rows are already on the client.
   const multiMonth = period !== "1m";
-  const byBucket = new Map<number, { day: number; night: number }>();
-  for (const r of rows) {
-    const key = bucketStart(grain, r.date).getTime();
-    const cur = byBucket.get(key) ?? { day: 0, night: 0 };
-    cur.day += r.dayBags;
-    cur.night += r.nightBags;
-    byBucket.set(key, cur);
-  }
-  const dailyChart = Array.from(byBucket.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([time, v]) => {
-      const d = new Date(time);
-      return {
-        label:
-          grain === "daily" && !multiMonth ? String(d.getUTCDate()) : bucketLabel(grain, d),
-        day: v.day,
-        night: v.night,
-      };
-    });
+  const outputRows = rows.map((r) => ({
+    date: r.date.toISOString(),
+    day: r.dayBags,
+    night: r.nightBags,
+  }));
 
-  const trendChart = trend.map((r) => ({
-    label: bucketLabel(grain, new Date(r.bucket)),
+  const trendData = trend.map((r) => ({
+    bucket: new Date(r.bucket).toISOString(),
     bags: Number(r.total_bags),
   }));
 
   return (
+    <GrainScope initialGrain={grain}>
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -128,9 +112,7 @@ export default async function ProductionReportPage({
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Suspense>
-            <GrainPicker value={grain} />
-          </Suspense>
+          <ScopedGrainPicker />
           <Suspense>
             <PeriodPicker value={period} />
           </Suspense>
@@ -138,17 +120,7 @@ export default async function ProductionReportPage({
       </div>
 
       {/* Output chart (bucketed by grain) */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          {grain === "daily" ? "Daily" : grain === "weekly" ? "Weekly" : "Monthly"} Output (day
-          vs night)
-        </h2>
-        {dailyChart.length > 0 ? (
-          <ProductionDailyChart data={dailyChart} />
-        ) : (
-          <p className="py-8 text-center text-sm text-neutral-400">No production in this period.</p>
-        )}
-      </section>
+      <ProductionOutputSection rows={outputRows} multiMonth={multiMonth} />
 
       {/* Daily table */}
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
@@ -222,16 +194,8 @@ export default async function ProductionReportPage({
       </section>
 
       {/* Trend */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Production Trend ({grainWindowLabel(grain, trendBuckets)})
-        </h2>
-        {trendChart.length > 0 ? (
-          <ProductionTrendChart data={trendChart} />
-        ) : (
-          <p className="py-8 text-center text-sm text-neutral-400">No history yet.</p>
-        )}
-      </section>
+      <ProductionTrendSection initialData={trendData} />
     </div>
+    </GrainScope>
   );
 }

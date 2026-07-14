@@ -9,16 +9,14 @@ import {
   periodRange,
 } from "@/lib/format";
 import {
-  bucketLabel,
   defaultGrainBuckets,
   grainUnit,
-  grainWindowLabel,
   grainWindowStart,
   parseGrainParam,
 } from "@/lib/granularity";
 import { PeriodPicker } from "@/components/period-picker";
-import { GrainPicker } from "@/components/grain-picker";
-import { ContractorMonthlyChart } from "@/components/charts/contractor-monthly-chart";
+import { GrainScope, ScopedGrainPicker } from "@/components/grain-scope";
+import { ContractorChartSection } from "@/components/chart-sections/contractor-chart-section";
 
 type LedgerRow = {
   date: Date;
@@ -84,12 +82,13 @@ export default async function ContractorReportPage({
   `;
 
   const chartData = bucketed.map((r) => ({
-    label: bucketLabel(grain, new Date(r.bucket)),
+    bucket: new Date(r.bucket).toISOString(),
     earned: Number(r.earned),
     paid: Number(r.paid),
   }));
 
   return (
+    <GrainScope initialGrain={grain}>
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -99,9 +98,7 @@ export default async function ContractorReportPage({
           <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Suspense>
-            <GrainPicker value={grain} />
-          </Suspense>
+          <ScopedGrainPicker />
           <Suspense>
             <PeriodPicker value={period} />
           </Suspense>
@@ -197,17 +194,9 @@ export default async function ContractorReportPage({
       </section>
 
       {/* Earned vs paid chart */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Earned vs Paid ({grainWindowLabel(grain, chartBuckets)})
-        </h2>
-        {chartData.length > 0 ? (
-          <ContractorMonthlyChart data={chartData} />
-        ) : (
-          <p className="py-8 text-center text-sm text-neutral-400">No history yet.</p>
-        )}
-      </section>
+      <ContractorChartSection initialData={chartData} />
     </div>
+    </GrainScope>
   );
 }
 
