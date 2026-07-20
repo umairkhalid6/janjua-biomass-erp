@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, toDateInputValue } from "@/lib/format";
+import { MATERIAL_LABELS } from "@/lib/constants";
 import { DeleteButton } from "@/components/delete-button";
+import { foldInstantPayments } from "@/lib/ledger";
 import { SupplierPaymentForm } from "../supplier-forms";
 import { deleteSupplierPayment } from "../actions";
 
@@ -42,7 +44,7 @@ export default async function SupplierDetailPage({
   const supplier = await prisma.supplier.findUnique({ where: { id } });
   if (!supplier) notFound();
 
-  const [summaryRows, ledgerRows] = await Promise.all([
+  const [summaryRows, ledgerRows, purchases] = await Promise.all([
     prisma.$queryRaw<SummaryRow[]>`
       SELECT * FROM v_supplier_summary WHERE supplier_id = ${id}
     `,
@@ -51,22 +53,62 @@ export default async function SupplierDetailPage({
       WHERE supplier_id = ${id}
       ORDER BY date NULLS FIRST, entry_id
     `,
+    prisma.materialPurchase.findMany({
+      where: { supplierId: id },
+      include: { payments: true },
+      orderBy: { date: "desc" },
+    }),
   ]);
+
+  // Only purchases still owing something can be picked in "Apply to" — a
+  // settled purchase has nothing left for a new payment to apply against.
+  const purchaseOptions = purchases
+    .map((p) => {
+      const total = p.materialCost.toNumber() + p.handlingCost.toNumber();
+      const paid = p.payments.reduce((s, pay) => s + pay.amount.toNumber(), 0);
+      const outstanding = total - paid;
+      return {
+        id: p.id,
+        label: `${MATERIAL_LABELS[p.materialType] ?? p.materialType} — ${formatDate(
+          toDateInputValue(p.date)
+        )} — ${formatPKR(outstanding)} owed`,
+        outstanding,
+      };
+    })
+    .filter((p) => p.outstanding > 0.005)
+    .map(({ id: pid, label }) => ({ id: pid, label }));
 
   const summary = summaryRows[0];
   const balanceOwed = summary ? Number(summary.balance_owed) : 0;
   const totalPurchased = summary ? Number(summary.total_purchased) : 0;
   const totalPaid = summary ? Number(summary.total_paid) : 0;
 
-  const ledger = ledgerRows.map((r) => ({
-    entryId: r.entry_id,
-    date: r.date,
-    entryType: r.entry_type,
-    description: r.description,
-    debit: Number(r.debit),
-    credit: Number(r.credit),
-    balance: Number(r.balance),
-  }));
+  // A payment recorded together with its purchase (linked, same date) reads as
+  // one event to the owner — fold it into the purchase row instead of showing
+  // two ledger lines. Payments applied on a later date stay separate.
+  const paymentMethodById = new Map<string, string>();
+  const instantPaymentTarget = new Map<string, string>();
+  for (const p of purchases) {
+    for (const pay of p.payments) {
+      paymentMethodById.set(pay.id, pay.method);
+      if (pay.date.getTime() === p.date.getTime()) {
+        instantPaymentTarget.set(pay.id, p.id);
+      }
+    }
+  }
+
+  const ledger = foldInstantPayments(
+    ledgerRows.map((r) => ({
+      entryId: r.entry_id,
+      date: r.date,
+      entryType: r.entry_type,
+      description: r.description,
+      debit: Number(r.debit),
+      credit: Number(r.credit),
+      balance: Number(r.balance),
+    })),
+    instantPaymentTarget
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -143,7 +185,7 @@ export default async function SupplierDetailPage({
         <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
           Record Payment
         </h2>
-        <SupplierPaymentForm supplierId={id} />
+        <SupplierPaymentForm supplierId={id} purchases={purchaseOptions} />
       </section>
 
       {/* Ledger table */}
@@ -159,8 +201,8 @@ export default async function SupplierDetailPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Description</th>
-                <th className="px-4 py-3 text-right font-medium">Debit</th>
-                <th className="px-4 py-3 text-right font-medium">Credit</th>
+                <th className="px-4 py-3 text-right font-medium">Purchased</th>
+                <th className="px-4 py-3 text-right font-medium">Paid</th>
                 <th className="px-4 py-3 text-right font-medium">Balance</th>
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
@@ -178,6 +220,11 @@ export default async function SupplierDetailPage({
               )}
               {ledger.map((row, i) => {
                 const isPayment = row.entryType === "PAYMENT";
+                // Standalone payment rows delete via their own entry id;
+                // folded rows delete the payment(s) merged into them.
+                const deletablePaymentIds = isPayment
+                  ? [row.entryId]
+                  : row.foldedPaymentIds;
 
                 return (
                   <tr
@@ -203,6 +250,14 @@ export default async function SupplierDetailPage({
                       >
                         {row.description}
                       </span>
+                      {row.foldedPaymentIds.length > 0 && (
+                        <span className="ml-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                          {row.credit >= row.debit ? "Paid" : "Part paid"} —{" "}
+                          {row.foldedPaymentIds
+                            .map((pid) => paymentMethodById.get(pid) ?? "Cash")
+                            .join(", ")}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                       {row.debit > 0 ? formatPKR(row.debit) : ""}
@@ -221,20 +276,26 @@ export default async function SupplierDetailPage({
                     >
                       {formatPKR(Math.abs(row.balance))}
                       {row.balance < 0
-                        ? " Cr"
+                        ? " Advance"
                         : row.balance > 0
-                        ? " Dr"
+                        ? " Owed"
                         : ""}
                     </td>
                     <td className="px-4 py-3">
                       {/* entry_id for PAYMENT rows is the SupplierPayment.id */}
-                      {isPayment && (
-                        <form action={deleteSupplierPayment}>
-                          <input type="hidden" name="id" value={row.entryId} />
+                      {deletablePaymentIds.map((pid) => (
+                        <form key={pid} action={deleteSupplierPayment}>
+                          <input type="hidden" name="id" value={pid} />
                           <input type="hidden" name="supplierId" value={id} />
-                          <DeleteButton confirmMessage="Delete this payment? This cannot be undone." />
+                          <DeleteButton
+                            confirmMessage={
+                              isPayment
+                                ? "Delete this payment? This cannot be undone."
+                                : "Delete the payment made with this purchase? The purchase stays and will show as owed."
+                            }
+                          />
                         </form>
-                      )}
+                      ))}
                     </td>
                   </tr>
                 );

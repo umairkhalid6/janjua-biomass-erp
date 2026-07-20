@@ -69,6 +69,36 @@ export async function updateSupplier(
   return { ok: "Supplier updated." };
 }
 
+export async function deleteSupplier(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { error: "Supplier ID missing." };
+
+  // Purchases and payments reference suppliers with ON DELETE RESTRICT, so a
+  // supplier with ledger history cannot be removed — the records would be
+  // orphaned. Check up front to give a clear message instead of a DB error.
+  const [purchasesCount, paymentsCount] = await Promise.all([
+    prisma.materialPurchase.count({ where: { supplierId: id } }),
+    prisma.supplierPayment.count({ where: { supplierId: id } }),
+  ]);
+  if (purchasesCount > 0 || paymentsCount > 0) {
+    return {
+      error: `This supplier has ${purchasesCount} purchase(s) and ${paymentsCount} payment(s) on record and cannot be deleted. Delete those entries first.`,
+    };
+  }
+
+  await prisma.supplier.delete({ where: { id } });
+
+  revalidatePath("/suppliers");
+  revalidatePath("/purchases");
+  revalidatePath("/reports/suppliers");
+  return { ok: "Supplier deleted." };
+}
+
 export async function createSupplierPayment(
   _prev: ActionState,
   formData: FormData
@@ -80,6 +110,7 @@ export async function createSupplierPayment(
   const amountStr = String(formData.get("amount") ?? "").trim();
   const method = String(formData.get("method") ?? "Cash").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const purchaseId = String(formData.get("purchaseId") ?? "").trim();
 
   if (!supplierId) return { error: "Supplier ID missing." };
   if (!dateStr) return { error: "Date is required." };
@@ -98,12 +129,17 @@ export async function createSupplierPayment(
       amount,
       method: method || "Cash",
       notes: notes || null,
+      // Empty string means "general payment" — leave unlinked so it applies
+      // to the running balance rather than one specific purchase.
+      purchaseId: purchaseId || null,
     },
   });
 
   revalidatePath(`/suppliers/${supplierId}`);
   revalidatePath("/suppliers");
   revalidatePath("/reports/suppliers");
+  // Payments drive the Paid/Partial/Unpaid badge on the purchases list.
+  revalidatePath("/purchases");
   return { ok: "Payment recorded." };
 }
 
@@ -122,4 +158,5 @@ export async function deleteSupplierPayment(
   revalidatePath(`/suppliers/${supplierId}`);
   revalidatePath("/suppliers");
   revalidatePath("/reports/suppliers");
+  revalidatePath("/purchases");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { upsertProductionDay, type ActionState } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -52,6 +52,16 @@ export function ProductionForm({
   const [bags, setBags] = useState(
     existing ? String(existing.dayShiftBags) : ""
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // After a successful save on the add form, clear everything for the next
+  // entry; remounting via key resets the uncontrolled fields too.
+  useEffect(() => {
+    if (!state.ok || existing) return;
+    setShift("DAY");
+    setBags("");
+    setFormKey((k) => k + 1);
+  }, [state, existing]);
 
   const onShiftChange = (v: string) => {
     const s = v === "NIGHT" ? "NIGHT" : "DAY";
@@ -64,7 +74,7 @@ export function ProductionForm({
   };
 
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
       {existing && <input type="hidden" name="id" value={existing.id} />}
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">

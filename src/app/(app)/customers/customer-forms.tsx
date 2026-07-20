@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   createCustomer,
@@ -67,7 +67,7 @@ function CustomerFields({ existing }: { existing?: CustomerRow }) {
           type="number"
           step="0.01"
           min="0"
-          defaultValue={Math.abs(existing?.openingBalance ?? 0)}
+          defaultValue={existing ? Math.abs(existing.openingBalance ?? 0) : undefined}
           placeholder="0.00"
           className={input}
         />
@@ -81,8 +81,8 @@ function CustomerFields({ existing }: { existing?: CustomerRow }) {
           defaultValue={(existing?.openingBalance ?? 0) < 0 ? "CR" : "DR"}
           className={input}
         >
-          <option value="DR">Customer owes us — outstanding (Dr)</option>
-          <option value="CR">Customer paid in advance — credit (Cr)</option>
+          <option value="DR">Customer owes us — outstanding</option>
+          <option value="CR">We owe customer — advance / prepaid</option>
         </select>
       </div>
     </>
@@ -98,8 +98,16 @@ export function CreateCustomerForm({
     createCustomer,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save so the next customer can be
+  // entered right away; remounting via key resets the uncontrolled fields.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-4">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-4">
       <CustomerFields />
       <div className="sm:col-span-4 flex items-center gap-3">
         <Submit label="Add Customer" />
@@ -142,8 +150,16 @@ export function CustomerPaymentForm({ customerId }: { customerId: string }) {
     createCustomerPayment,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save; remounting via key resets the
+  // uncontrolled fields and puts the date back to today.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
       <input type="hidden" name="customerId" value={customerId} />
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -160,6 +176,7 @@ export function CustomerPaymentForm({ customerId }: { customerId: string }) {
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0.00"
           required
           className={input}
         />

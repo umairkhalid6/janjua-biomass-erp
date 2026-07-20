@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createExpense, updateExpense, type ActionState } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -73,6 +73,7 @@ function ExpenseFields({
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0.00"
           required
           defaultValue={existing?.amount ?? ""}
           className={input}
@@ -100,8 +101,16 @@ export function CreateExpenseForm({ categories }: { categories: string[] }) {
     createExpense,
     {},
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save; remounting via key resets the
+  // uncontrolled fields and puts the date back to today.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
       <ExpenseFields categories={categories} />
       <div className="sm:col-span-2 flex items-center gap-3">
         <Submit label="Add Expense" />

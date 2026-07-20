@@ -34,7 +34,7 @@ type CustomerSummaryRow = {
 const BALANCE_OPTIONS = [
   { value: "owes", label: "Owes us" },
   { value: "clear", label: "Clear" },
-  { value: "credit", label: "Has credit" },
+  { value: "credit", label: "Has advance" },
 ];
 
 const AGING_OPTIONS = [

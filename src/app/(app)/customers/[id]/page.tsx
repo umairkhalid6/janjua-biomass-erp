@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, toDateInputValue } from "@/lib/format";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
+import { foldInstantPayments } from "@/lib/ledger";
 import {
   CustomerPaymentForm,
   EditCustomerForm,
@@ -104,15 +105,29 @@ export default async function CustomerDetailPage({
   const totalSales = summary ? Number(summary.total_sales) : 0;
   const totalPaid = summary ? Number(summary.total_paid) : 0;
 
-  const ledger = ledgerRows.map((r) => ({
-    entryId: r.entry_id,
-    date: r.date,
-    entryType: r.entry_type,
-    description: r.description,
-    debit: Number(r.debit),
-    credit: Number(r.credit),
-    balance: Number(r.balance),
-  }));
+  // A receipt recorded together with its invoice (linked, same date) reads as
+  // one event — fold it into the sale row instead of showing two ledger lines.
+  // Receipts collected on a later date stay separate.
+  const saleTimeById = new Map(sales.map((s) => [s.id, s.date.getTime()]));
+  const instantPaymentTarget = new Map<string, string>();
+  for (const p of payments) {
+    if (p.saleId && saleTimeById.get(p.saleId) === p.date.getTime()) {
+      instantPaymentTarget.set(p.id, p.saleId);
+    }
+  }
+
+  const ledger = foldInstantPayments(
+    ledgerRows.map((r) => ({
+      entryId: r.entry_id,
+      date: r.date,
+      entryType: r.entry_type,
+      description: r.description,
+      debit: Number(r.debit),
+      credit: Number(r.credit),
+      balance: Number(r.balance),
+    })),
+    instantPaymentTarget
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -226,8 +241,8 @@ export default async function CustomerDetailPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Description</th>
-                <th className="px-4 py-3 text-right font-medium">Debit</th>
-                <th className="px-4 py-3 text-right font-medium">Credit</th>
+                <th className="px-4 py-3 text-right font-medium">Billed</th>
+                <th className="px-4 py-3 text-right font-medium">Received</th>
                 <th className="px-4 py-3 text-right font-medium">Balance</th>
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
@@ -246,6 +261,11 @@ export default async function CustomerDetailPage({
               {ledger.map((row, i) => {
                 const isSale = row.entryType === "SALE";
                 const isPayment = row.entryType === "PAYMENT";
+                // Standalone payment rows edit/delete via their own entry id;
+                // folded rows manage the payment(s) merged into them.
+                const rowPaymentIds = isPayment
+                  ? [row.entryId]
+                  : row.foldedPaymentIds;
 
                 return (
                   <tr
@@ -263,12 +283,28 @@ export default async function CustomerDetailPage({
                     </td>
                     <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
                       {isSale ? (
-                        <Link
-                          href={`/sales/${row.entryId}/invoice`}
-                          className="text-green-700 hover:underline dark:text-green-400"
-                        >
-                          {row.description}
-                        </Link>
+                        <>
+                          <Link
+                            href={`/sales/${row.entryId}/invoice`}
+                            className="text-green-700 hover:underline dark:text-green-400"
+                          >
+                            {row.description}
+                          </Link>
+                          {row.foldedPaymentIds.length > 0 && (
+                            <span className="ml-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                              {row.credit >= row.debit
+                                ? "Received"
+                                : "Part received"}{" "}
+                              —{" "}
+                              {row.foldedPaymentIds
+                                .map(
+                                  (pid) =>
+                                    paymentById.get(pid)?.method ?? "Cash"
+                                )
+                                .join(", ")}
+                            </span>
+                          )}
+                        </>
                       ) : (
                         <span
                           className={
@@ -298,9 +334,9 @@ export default async function CustomerDetailPage({
                     >
                       {formatPKR(Math.abs(row.balance))}
                       {row.balance < 0
-                        ? " Cr"
+                        ? " Advance"
                         : row.balance > 0
-                        ? " Dr"
+                        ? " Owes"
                         : ""}
                     </td>
                     <td className="px-4 py-3">
@@ -330,24 +366,35 @@ export default async function CustomerDetailPage({
                           </EditDialog>
                         )}
                         {/* entry_id for PAYMENT rows is the CustomerPayment.id */}
-                        {isPayment && paymentById.has(row.entryId) && (
-                          <EditDialog title="Edit Payment">
-                            <EditCustomerPaymentForm
-                              existing={paymentById.get(row.entryId)!}
-                            />
-                          </EditDialog>
-                        )}
-                        {isPayment && (
-                          <form action={deleteCustomerPayment}>
-                            <input
-                              type="hidden"
-                              name="id"
-                              value={row.entryId}
-                            />
-                            <input type="hidden" name="customerId" value={id} />
-                            <DeleteButton confirmMessage="Delete this payment? This cannot be undone." />
-                          </form>
-                        )}
+                        {rowPaymentIds.map((pid) => (
+                          <div
+                            key={pid}
+                            className="flex items-center gap-2"
+                          >
+                            {paymentById.has(pid) && (
+                              <EditDialog title="Edit Payment">
+                                <EditCustomerPaymentForm
+                                  existing={paymentById.get(pid)!}
+                                />
+                              </EditDialog>
+                            )}
+                            <form action={deleteCustomerPayment}>
+                              <input type="hidden" name="id" value={pid} />
+                              <input
+                                type="hidden"
+                                name="customerId"
+                                value={id}
+                              />
+                              <DeleteButton
+                                confirmMessage={
+                                  isPayment
+                                    ? "Delete this payment? This cannot be undone."
+                                    : "Delete the payment received with this invoice? The invoice stays and will show as owed."
+                                }
+                              />
+                            </form>
+                          </div>
+                        ))}
                       </div>
                     </td>
                   </tr>

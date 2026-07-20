@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createPayment, createAdjustment, type ActionState } from "./actions";
 import { DateInput } from "@/components/date-input";
@@ -26,8 +26,16 @@ export function PaymentForm() {
     createPayment,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save; remounting via key resets the
+  // uncontrolled fields and puts the date back to today.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-3">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-3">
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
@@ -43,6 +51,7 @@ export function PaymentForm() {
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0.00"
           required
           className={input}
         />
@@ -76,8 +85,16 @@ export function AdjustmentForm() {
     createAdjustment,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save; remounting via key resets the
+  // uncontrolled fields and puts the date back to today.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date

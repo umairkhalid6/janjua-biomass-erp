@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { upsertElectricityBill, type ActionState } from "./actions";
 
@@ -38,8 +38,17 @@ export function UpsertElectricityForm({
     upsertElectricityBill,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // After a successful save on the add form, clear the fields for the next
+  // entry; remounting via key restores the default month.
+  useEffect(() => {
+    if (!state.ok || existing) return;
+    setFormKey((k) => k + 1);
+  }, [state, existing]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-3">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-3">
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Month
@@ -61,6 +70,7 @@ export function UpsertElectricityForm({
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0.00"
           required
           defaultValue={existing?.billAmount ?? ""}
           className={input}
@@ -75,6 +85,7 @@ export function UpsertElectricityForm({
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0"
           required
           defaultValue={existing?.unitsConsumed ?? ""}
           className={input}

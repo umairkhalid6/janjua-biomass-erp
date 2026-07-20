@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   createSupplier,
@@ -65,7 +65,7 @@ function SupplierFields({ existing }: { existing?: SupplierRow }) {
           name="openingBalance"
           type="number"
           step="0.01"
-          defaultValue={existing?.openingBalance ?? 0}
+          defaultValue={existing ? existing.openingBalance ?? 0 : undefined}
           placeholder="0.00"
           className={input}
         />
@@ -79,8 +79,16 @@ export function CreateSupplierForm() {
     createSupplier,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save so the next supplier can be
+  // entered right away; remounting via key resets the uncontrolled fields.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-4">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-4">
       <SupplierFields />
       <div className="sm:col-span-4 flex items-center gap-3">
         <Submit label="Add Supplier" />
@@ -118,13 +126,29 @@ export function EditSupplierForm({ existing }: { existing: SupplierRow }) {
 
 const METHODS = ["Cash", "Bank", "Cheque", "Online"];
 
-export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
+type PurchaseOption = { id: string; label: string };
+
+export function SupplierPaymentForm({
+  supplierId,
+  purchases = [],
+}: {
+  supplierId: string;
+  purchases?: PurchaseOption[];
+}) {
   const [state, action] = useActionState<ActionState, FormData>(
     createSupplierPayment,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save; remounting via key resets the
+  // uncontrolled fields and puts the date back to today.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
+
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
       <input type="hidden" name="supplierId" value={supplierId} />
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -141,6 +165,7 @@ export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0.00"
           required
           className={input}
         />
@@ -153,6 +178,19 @@ export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
           {METHODS.map((m) => (
             <option key={m} value={m}>
               {m}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Apply to (optional)
+        </label>
+        <select name="purchaseId" defaultValue="" className={input}>
+          <option value="">General payment (advance / previous balance)</option>
+          {purchases.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
             </option>
           ))}
         </select>

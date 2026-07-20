@@ -62,7 +62,7 @@ export default async function PurchasesPage({
         date: { gte, lte },
         ...(material ? { materialType: material } : {}),
       },
-      include: { supplier: true },
+      include: { supplier: true, payments: true },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
@@ -77,6 +77,9 @@ export default async function PurchasesPage({
     const storedRate = p.ratePerKg.toNumber();
     const ratePerKg =
       storedRate > 0 ? storedRate : weightKg > 0 ? total / weightKg : 0;
+    const paid = p.payments.reduce((s, pay) => s + pay.amount.toNumber(), 0);
+    const paymentStatus: "paid" | "partial" | "unpaid" =
+      paid >= total - 0.005 ? "paid" : paid > 0.005 ? "partial" : "unpaid";
     return {
       id: p.id,
       date: toDateInputValue(p.date),
@@ -89,6 +92,7 @@ export default async function PurchasesPage({
       total,
       ratePerKg,
       notes: p.notes,
+      paymentStatus,
     };
   });
 
@@ -184,6 +188,7 @@ export default async function PurchasesPage({
                 <th className="px-4 py-3 font-medium text-right">Handling</th>
                 <th className="px-4 py-3 font-medium text-right">Total</th>
                 <th className="px-4 py-3 font-medium text-right">Rate/kg</th>
+                <th className="px-4 py-3 font-medium">Payment</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -191,7 +196,7 @@ export default async function PurchasesPage({
               {pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
                     {hasFilters
@@ -230,6 +235,23 @@ export default async function PurchasesPage({
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-500 text-xs">
                     {formatPKR(row.ratePerKg)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        row.paymentStatus === "paid"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                          : row.paymentStatus === "partial"
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300"
+                          : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+                      }`}
+                    >
+                      {row.paymentStatus === "paid"
+                        ? "Paid"
+                        : row.paymentStatus === "partial"
+                        ? "Partial"
+                        : "Unpaid"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
@@ -278,6 +300,7 @@ export default async function PurchasesPage({
                   <td className="px-4 py-3 text-right text-neutral-500">
                     {formatPKR(avgRate)}/kg
                   </td>
+                  <td />
                   <td />
                 </tr>
               </tfoot>

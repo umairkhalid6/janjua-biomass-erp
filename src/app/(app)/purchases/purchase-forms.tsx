@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { createPurchase, updatePurchase, type ActionState } from "./actions";
 import { createSupplier } from "@/app/(app)/suppliers/actions";
@@ -145,6 +145,8 @@ function QuickAddSupplier({
   );
 }
 
+const METHODS = ["Cash", "Bank", "Cheque", "Online"];
+
 function formatRate(n: number) {
   return `Rs ${n.toLocaleString("en-PK", {
     minimumFractionDigits: 2,
@@ -174,17 +176,34 @@ function PurchaseForm({
     existing ? String(existing.materialCost) : ""
   );
   const [handlingCost, setHandlingCost] = useState(
-    existing ? String(existing.handlingCost) : "0"
+    existing ? String(existing.handlingCost) : ""
   );
+  const [paymentStatus, setPaymentStatus] = useState<"UNPAID" | "PAID">(
+    "PAID"
+  );
+  const [formKey, setFormKey] = useState(0);
+
+  // After a successful save on the create form, clear everything for the
+  // next entry. Bumping the form key remounts the uncontrolled fields too —
+  // date back to today, material back to its default.
+  useEffect(() => {
+    if (!state.ok || existing) return;
+    setSupplierId("");
+    setWeight("");
+    setMaterialCost("");
+    setHandlingCost("");
+    setPaymentStatus("PAID");
+    setFormKey((k) => k + 1);
+  }, [state, existing]);
 
   const w = parseFloat(weight);
   const mc = parseFloat(materialCost);
   const hc = parseFloat(handlingCost || "0");
-  const ratePerKg =
-    w > 0 && !isNaN(mc) ? (mc + (isNaN(hc) ? 0 : hc)) / w : null;
+  const total = !isNaN(mc) ? mc + (isNaN(hc) ? 0 : hc) : 0;
+  const ratePerKg = w > 0 && !isNaN(mc) ? total / w : null;
 
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
       {existing && <input type="hidden" name="id" value={existing.id} />}
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -242,6 +261,7 @@ function PurchaseForm({
           type="number"
           step="0.01"
           min="0.01"
+          placeholder="0"
           required
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
@@ -257,6 +277,7 @@ function PurchaseForm({
           type="number"
           step="0.01"
           min="0"
+          placeholder="0.00"
           required
           value={materialCost}
           onChange={(e) => setMaterialCost(e.target.value)}
@@ -272,6 +293,7 @@ function PurchaseForm({
           type="number"
           step="0.01"
           min="0"
+          placeholder="0"
           value={handlingCost}
           onChange={(e) => setHandlingCost(e.target.value)}
           className={input}
@@ -298,6 +320,60 @@ function PurchaseForm({
           (Material + Handling) ÷ Weight
         </span>
       </div>
+      {!existing && (
+        <>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Payment Status
+            </label>
+            <select
+              name="paymentStatus"
+              value={paymentStatus}
+              onChange={(e) =>
+                setPaymentStatus(e.target.value as "UNPAID" | "PAID")
+              }
+              className={input}
+            >
+              <option value="PAID">
+                Paid in full{total > 0 ? ` — ${formatRate(total)}` : ""}
+              </option>
+              <option value="UNPAID">Unpaid / partial — on balance</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Payment Method
+            </label>
+            <select name="paymentMethod" defaultValue="Cash" className={input}>
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          {paymentStatus === "UNPAID" && (
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                Amount paid now (PKR, optional)
+              </label>
+              <input
+                name="amountPaid"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                className={input}
+              />
+              <p className="mt-1 text-[11px] text-neutral-400">
+                Leave empty if nothing was paid — the full amount goes on the
+                supplier&apos;s balance. Enter a smaller amount for a partial
+                payment.
+              </p>
+            </div>
+          )}
+        </>
+      )}
       <div className="sm:col-span-2 flex items-center gap-3">
         <Submit label={submitLabel} />
         {state.error && (

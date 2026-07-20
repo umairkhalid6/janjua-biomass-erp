@@ -32,6 +32,9 @@ export async function createPurchase(
   const materialCostStr = String(formData.get("materialCost") ?? "").trim();
   const handlingCostStr = String(formData.get("handlingCost") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const paymentStatus = String(formData.get("paymentStatus") ?? "PAID").trim();
+  const amountPaidStr = String(formData.get("amountPaid") ?? "").trim();
+  const paymentMethod = String(formData.get("paymentMethod") ?? "Cash").trim();
 
   if (!dateStr) return { error: "Date is required." };
   if (!supplierId) return { error: "Supplier is required." };
@@ -47,26 +50,55 @@ export async function createPurchase(
   if (isNaN(materialCost) || materialCost < 0)
     return { error: "Material cost must be a non-negative number." };
   if (isNaN(handlingCost) || handlingCost < 0)
-    return { error: "Handling cost must be a non-negative number." };
+    return { error: "Handling cost must be non-negative number." };
+
+  // Paid in full is the default (the common case at the counter) and settles
+  // the whole order alongside the purchase. The UNPAID branch may still carry
+  // an optional partial amount paid now; the rest goes on the balance.
+  const isPaid = paymentStatus === "PAID";
+  const total = materialCost + handlingCost;
+  const amountPaid = isPaid ? total : parseFloat(amountPaidStr || "0");
+  if (isNaN(amountPaid) || amountPaid < 0)
+    return { error: "Amount paid must be zero or a positive number." };
+  if (amountPaid > total)
+    return { error: "Amount paid cannot exceed the order total." };
 
   const date = parseDateInput(dateStr);
-  const ratePerKg = (materialCost + handlingCost) / weightKg;
+  const ratePerKg = total / weightKg;
 
-  await prisma.materialPurchase.create({
-    data: {
-      date,
-      materialType,
-      supplierId,
-      weightKg,
-      materialCost,
-      handlingCost,
-      ratePerKg,
-      notes: notes || null,
-    },
+  await prisma.$transaction(async (tx) => {
+    const purchase = await tx.materialPurchase.create({
+      data: {
+        date,
+        materialType,
+        supplierId,
+        weightKg,
+        materialCost,
+        handlingCost,
+        ratePerKg,
+        notes: notes || null,
+      },
+    });
+    if (amountPaid > 0) {
+      await tx.supplierPayment.create({
+        data: {
+          supplierId,
+          purchaseId: purchase.id,
+          date,
+          amount: amountPaid,
+          method: paymentMethod || "Cash",
+        },
+      });
+    }
   });
 
   revalidatePath("/purchases");
-  return { ok: "Purchase recorded." };
+  revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${supplierId}`);
+  revalidatePath("/reports/suppliers");
+  return {
+    ok: amountPaid > 0 ? "Purchase and payment recorded." : "Purchase recorded.",
+  };
 }
 
 export async function updatePurchase(

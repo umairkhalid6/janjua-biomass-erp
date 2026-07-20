@@ -230,7 +230,7 @@ export function InvoiceDocument({
           )}
           {previousBalance < 0 && (
             <div className="flex items-center justify-between px-3 py-1.5 text-sm">
-              <span className="text-neutral-500">Advance Credit</span>
+              <span className="text-neutral-500">Advance Paid</span>
               <span className="font-medium text-emerald-700">
                 − {formatPKR(-previousBalance)}
               </span>
@@ -269,7 +269,7 @@ export function InvoiceDocument({
           )}
           {balanceDue < -0.005 && (
             <p className="mt-2 text-center text-xs font-medium text-emerald-700">
-              Credit on account: {formatPKR(-balanceDue)}
+              Advance on account: {formatPKR(-balanceDue)}
             </p>
           )}
         </div>

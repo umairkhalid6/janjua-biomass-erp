@@ -87,6 +87,7 @@ model MaterialPurchase {
   ratePerKg    Decimal      @default(0) @db.Decimal(12, 2) // (materialCost + handlingCost) / weightKg
   notes        String?
   createdAt    DateTime     @default(now())
+  payments     SupplierPayment[]
 
   @@index([date])
   @@index([materialType, date])
@@ -101,9 +102,15 @@ model SupplierPayment {
   amount     Decimal  @db.Decimal(14, 2)
   method     String   @default("Cash") // Cash / Bank / Cheque / Online
   notes      String?
+  // Set when the payment was made against a specific purchase (at purchase
+  // entry or from the supplier page). The money is real even if the purchase
+  // is later deleted, so the link severs (SET NULL) rather than cascades.
+  purchaseId String?
+  purchase   MaterialPurchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
 
   @@index([date])
+  @@index([purchaseId])
   @@map("supplier_payments")
 }
 

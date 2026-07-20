@@ -4,7 +4,7 @@
 // invoice before printing/sharing, so the generated image shows "Amount
 // Received" and the true balance due. Hidden from print and image capture.
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   recordInvoicePayment,
@@ -54,6 +54,13 @@ export function RecordPaymentPanel({
     recordInvoicePayment,
     {}
   );
+  const [formKey, setFormKey] = useState(0);
+
+  // Clear the form after a successful save; remounting via key resets the
+  // uncontrolled fields and puts the date back to today.
+  useEffect(() => {
+    if (state.ok) setFormKey((k) => k + 1);
+  }, [state]);
 
   return (
     <section className="print:hidden border-b border-neutral-200 bg-neutral-50 px-4 py-4 sm:px-6">
@@ -115,7 +122,7 @@ export function RecordPaymentPanel({
           </ul>
         )}
 
-        <form action={action} className="mt-3 grid gap-3 sm:grid-cols-4">
+        <form key={formKey} action={action} className="mt-3 grid gap-3 sm:grid-cols-4">
           <input type="hidden" name="saleId" value={saleId} />
           <div>
             <label className="mb-1 block text-xs font-medium text-neutral-600">

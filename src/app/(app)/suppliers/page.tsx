@@ -12,6 +12,7 @@ import {
   ResetFilters,
 } from "@/components/table-filters";
 import { CreateSupplierForm, EditSupplierForm } from "./supplier-forms";
+import { DeleteSupplierButton } from "./delete-supplier-button";
 
 type SupplierSummaryRow = {
   supplier_id: string;
@@ -180,17 +181,20 @@ export default async function SuppliersPage({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <EditDialog title="Edit Supplier">
-                      <EditSupplierForm
-                        existing={{
-                          id: v.id,
-                          name: v.name,
-                          phone: v.phone,
-                          notes: v.notes,
-                          openingBalance: v.openingBalance.toNumber(),
-                        }}
-                      />
-                    </EditDialog>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <EditDialog title="Edit Supplier">
+                        <EditSupplierForm
+                          existing={{
+                            id: v.id,
+                            name: v.name,
+                            phone: v.phone,
+                            notes: v.notes,
+                            openingBalance: v.openingBalance.toNumber(),
+                          }}
+                        />
+                      </EditDialog>
+                      <DeleteSupplierButton supplierId={v.id} supplierName={v.name} />
+                    </div>
                   </td>
                 </tr>
               ))}

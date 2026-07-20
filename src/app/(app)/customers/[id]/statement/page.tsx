@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, parseDateInput, toDateInputValue } from "@/lib/format";
+import { foldInstantPayments } from "@/lib/ledger";
 import { PrintButton } from "./print-button";
 
 type LedgerRow = {
@@ -35,28 +36,72 @@ export default async function CustomerStatementPage({
   const toDate = sp.to ? parseDateInput(sp.to) : null;
 
   // Fetch all ledger rows; filter by date range on the server side
-  const allRows = await prisma.$queryRaw<LedgerRow[]>`
-    SELECT * FROM v_customer_ledger
-    WHERE customer_id = ${id}
-    ORDER BY date NULLS FIRST, entry_id
-  `;
+  const [allRows, sales, payments] = await Promise.all([
+    prisma.$queryRaw<LedgerRow[]>`
+      SELECT * FROM v_customer_ledger
+      WHERE customer_id = ${id}
+      ORDER BY date NULLS FIRST, entry_id
+    `,
+    prisma.pelletSale.findMany({
+      where: { customerId: id },
+      select: { id: true, date: true },
+    }),
+    prisma.customerPayment.findMany({
+      where: { customerId: id },
+      select: { id: true, saleId: true, date: true, method: true },
+    }),
+  ]);
+
+  // Match the customer ledger page: a receipt linked to an invoice on the same
+  // date folds into the invoice row instead of printing as a second line.
+  const saleTimeById = new Map(sales.map((s) => [s.id, s.date.getTime()]));
+  const paymentMethodById = new Map(payments.map((p) => [p.id, p.method]));
+  const instantPaymentTarget = new Map<string, string>();
+  for (const p of payments) {
+    if (p.saleId && saleTimeById.get(p.saleId) === p.date.getTime()) {
+      instantPaymentTarget.set(p.id, p.saleId);
+    }
+  }
+
+  const allEntries = foldInstantPayments(
+    allRows.map((r) => ({
+      entryId: r.entry_id,
+      date: r.date,
+      entryType: r.entry_type,
+      description: r.description,
+      debit: Number(r.debit),
+      credit: Number(r.credit),
+      balance: Number(r.balance),
+    })),
+    instantPaymentTarget
+  ).map((r) => ({
+    ...r,
+    description:
+      r.foldedPaymentIds.length > 0
+        ? `${r.description} — ${
+            r.credit >= r.debit ? "Received" : "Part received"
+          } (${r.foldedPaymentIds
+            .map((pid) => paymentMethodById.get(pid) ?? "Cash")
+            .join(", ")})`
+        : r.description,
+  }));
 
   // Find the opening balance (balance just before the from date, or the first row if no range)
   let openingCarryBalance = 0;
-  let filteredRows: typeof allRows = allRows;
+  let filteredRows: typeof allEntries = allEntries;
 
   if (fromDate) {
     // Carry forward: find the balance from the last row BEFORE the from date
-    const priorRows = allRows.filter((r) => {
+    const priorRows = allEntries.filter((r) => {
       if (!r.date) return true; // OPENING row is always "before"
       const d = new Date(r.date);
       return d < fromDate;
     });
     if (priorRows.length > 0) {
-      openingCarryBalance = Number(priorRows[priorRows.length - 1].balance);
+      openingCarryBalance = priorRows[priorRows.length - 1].balance;
     }
     // Now filter to only rows within the date range
-    filteredRows = allRows.filter((r) => {
+    filteredRows = allEntries.filter((r) => {
       if (!r.date) return false; // exclude OPENING row if we have a from date
       const d = new Date(r.date);
       if (d < fromDate) return false;
@@ -64,7 +109,7 @@ export default async function CustomerStatementPage({
       return true;
     });
   } else if (toDate) {
-    filteredRows = allRows.filter((r) => {
+    filteredRows = allEntries.filter((r) => {
       if (!r.date) return true; // include OPENING
       const d = new Date(r.date);
       return d <= toDate;
@@ -181,7 +226,7 @@ export default async function CustomerStatementPage({
               }`}
             >
               {formatPKR(Math.abs(openingCarryBalance))}
-              {openingCarryBalance > 0 ? " Dr" : openingCarryBalance < 0 ? " Cr" : ""}
+              {openingCarryBalance > 0 ? " Owes" : openingCarryBalance < 0 ? " Advance" : ""}
             </span>
           </div>
         )}
@@ -192,8 +237,8 @@ export default async function CustomerStatementPage({
             <tr className="border-b border-neutral-200">
               <th className="py-2 text-left font-semibold text-neutral-700">Date</th>
               <th className="py-2 text-left font-semibold text-neutral-700">Description</th>
-              <th className="py-2 text-right font-semibold text-neutral-700">Debit</th>
-              <th className="py-2 text-right font-semibold text-neutral-700">Credit</th>
+              <th className="py-2 text-right font-semibold text-neutral-700">Billed</th>
+              <th className="py-2 text-right font-semibold text-neutral-700">Received</th>
               <th className="py-2 text-right font-semibold text-neutral-700">Balance</th>
             </tr>
           </thead>
@@ -206,11 +251,9 @@ export default async function CustomerStatementPage({
               </tr>
             )}
             {filteredRows.map((row, i) => {
-              const debit = Number(row.debit);
-              const credit = Number(row.credit);
-              const balance = Number(row.balance);
+              const { debit, credit, balance } = row;
               return (
-                <tr key={`${row.entry_id}-${i}`} className="border-b border-neutral-100">
+                <tr key={`${row.entryId}-${i}`} className="border-b border-neutral-100">
                   <td className="py-2.5 text-neutral-500 whitespace-nowrap">
                     {row.date ? formatDate(toDateInputValue(new Date(row.date))) : "—"}
                   </td>
@@ -231,7 +274,7 @@ export default async function CustomerStatementPage({
                     }`}
                   >
                     {formatPKR(Math.abs(balance))}
-                    {balance > 0 ? " Dr" : balance < 0 ? " Cr" : ""}
+                    {balance > 0 ? " Owes" : balance < 0 ? " Advance" : ""}
                   </td>
                 </tr>
               );
@@ -247,8 +290,8 @@ export default async function CustomerStatementPage({
                 <span className="font-bold text-neutral-900">Closing Balance</span>
                 <span className="font-bold text-neutral-900">
                   {(() => {
-                    const lastBal = Number(filteredRows[filteredRows.length - 1].balance);
-                    return `${formatPKR(Math.abs(lastBal))}${lastBal > 0 ? " Dr" : lastBal < 0 ? " Cr" : ""}`;
+                    const lastBal = filteredRows[filteredRows.length - 1].balance;
+                    return `${formatPKR(Math.abs(lastBal))}${lastBal > 0 ? " Owes" : lastBal < 0 ? " Advance" : ""}`;
                   })()}
                 </span>
               </div>
