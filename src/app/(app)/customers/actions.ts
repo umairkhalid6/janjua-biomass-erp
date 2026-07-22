@@ -18,6 +18,20 @@ function parseOpeningBalance(formData: FormData): number {
   return direction === "CR" ? -amount : amount;
 }
 
+// Payment amount is entered unsigned with an explicit Credit/Debit direction
+// (mirrors parseOpeningBalance). "Credit" is the normal receipt/advance — it
+// lands in the ledger's "Received" column and reduces the balance, so it is
+// stored positive (the ledger negates it). "Debit" is a charge/adjustment —
+// it lands in the "Billed" column and increases the balance, so it is stored
+// negative. Returns null when the entered amount isn't a positive number.
+function parseSignedPaymentAmount(formData: FormData): number | null {
+  const amountStr = String(formData.get("amount") ?? "").trim();
+  const direction = String(formData.get("direction") ?? "CR").trim();
+  const amount = Math.abs(parseFloat(amountStr));
+  if (isNaN(amount) || amount <= 0) return null;
+  return direction === "DR" ? -amount : amount;
+}
+
 export async function createCustomer(
   _prev: ActionState,
   formData: FormData
@@ -85,25 +99,30 @@ export async function deleteCustomer(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Customer ID missing." };
 
-  // Sales and payments reference customers with ON DELETE RESTRICT, so a
-  // customer with ledger history cannot be removed — the records would be
-  // orphaned. Check up front to give a clear message instead of a DB error.
+  // Sales and payments reference customers with ON DELETE RESTRICT, so the
+  // owner would otherwise have to clear every entry by hand first. Instead,
+  // remove the customer together with all their ledger history in one
+  // transaction. Payments are deleted before sales so the payment→sale link
+  // (SET NULL) never briefly orphans a row mid-transaction.
   const [salesCount, paymentsCount] = await Promise.all([
     prisma.pelletSale.count({ where: { customerId: id } }),
     prisma.customerPayment.count({ where: { customerId: id } }),
   ]);
-  if (salesCount > 0 || paymentsCount > 0) {
-    return {
-      error: `This customer has ${salesCount} sale(s) and ${paymentsCount} payment(s) on record and cannot be deleted. Delete those entries first.`,
-    };
-  }
 
-  await prisma.customer.delete({ where: { id } });
+  await prisma.$transaction([
+    prisma.customerPayment.deleteMany({ where: { customerId: id } }),
+    prisma.pelletSale.deleteMany({ where: { customerId: id } }),
+    prisma.customer.delete({ where: { id } }),
+  ]);
 
   revalidatePath("/customers");
   revalidatePath("/sales");
   revalidatePath("/reports/customers");
-  return { ok: "Customer deleted." };
+  const removed =
+    salesCount > 0 || paymentsCount > 0
+      ? ` Removed ${salesCount} sale(s) and ${paymentsCount} payment(s).`
+      : "";
+  return { ok: `Customer deleted.${removed}` };
 }
 
 export async function createCustomerPayment(
@@ -122,8 +141,8 @@ export async function createCustomerPayment(
   if (!dateStr) return { error: "Date is required." };
   if (!amountStr) return { error: "Amount is required." };
 
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount <= 0)
+  const amount = parseSignedPaymentAmount(formData);
+  if (amount === null)
     return { error: "Amount must be a positive number." };
 
   const date = parseDateInput(dateStr);
@@ -161,8 +180,8 @@ export async function updateCustomerPayment(
   if (!dateStr) return { error: "Date is required." };
   if (!amountStr) return { error: "Amount is required." };
 
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount <= 0)
+  const amount = parseSignedPaymentAmount(formData);
+  if (amount === null)
     return { error: "Amount must be a positive number." };
 
   const date = parseDateInput(dateStr);

@@ -172,6 +172,15 @@ export function SupplierPaymentForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Type
+        </label>
+        <select name="direction" defaultValue="CR" className={input}>
+          <option value="CR">Credit — payment made / advance</option>
+          <option value="DR">Debit — adjustment</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Method
         </label>
         <select name="method" defaultValue="Cash" className={input}>

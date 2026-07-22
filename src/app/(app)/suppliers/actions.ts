@@ -7,6 +7,19 @@ import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string; id?: string };
 
+// Payment amount is entered unsigned with an explicit Credit/Debit direction.
+// "Credit" is the normal payment/advance — it lands in the ledger's "Paid"
+// column and reduces what we owe, so it is stored positive (the ledger negates
+// it). "Debit" is an adjustment that increases what we owe, so it is stored
+// negative. Returns null when the entered amount isn't a positive number.
+function parseSignedPaymentAmount(formData: FormData): number | null {
+  const amountStr = String(formData.get("amount") ?? "").trim();
+  const direction = String(formData.get("direction") ?? "CR").trim();
+  const amount = Math.abs(parseFloat(amountStr));
+  if (isNaN(amount) || amount <= 0) return null;
+  return direction === "DR" ? -amount : amount;
+}
+
 export async function createSupplier(
   _prev: ActionState,
   formData: FormData
@@ -78,25 +91,30 @@ export async function deleteSupplier(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Supplier ID missing." };
 
-  // Purchases and payments reference suppliers with ON DELETE RESTRICT, so a
-  // supplier with ledger history cannot be removed — the records would be
-  // orphaned. Check up front to give a clear message instead of a DB error.
+  // Purchases and payments reference suppliers with ON DELETE RESTRICT, so the
+  // owner would otherwise have to clear every entry by hand first. Instead,
+  // remove the supplier together with all their ledger history in one
+  // transaction. Payments are deleted before purchases so the payment→purchase
+  // link (SET NULL) never briefly orphans a row mid-transaction.
   const [purchasesCount, paymentsCount] = await Promise.all([
     prisma.materialPurchase.count({ where: { supplierId: id } }),
     prisma.supplierPayment.count({ where: { supplierId: id } }),
   ]);
-  if (purchasesCount > 0 || paymentsCount > 0) {
-    return {
-      error: `This supplier has ${purchasesCount} purchase(s) and ${paymentsCount} payment(s) on record and cannot be deleted. Delete those entries first.`,
-    };
-  }
 
-  await prisma.supplier.delete({ where: { id } });
+  await prisma.$transaction([
+    prisma.supplierPayment.deleteMany({ where: { supplierId: id } }),
+    prisma.materialPurchase.deleteMany({ where: { supplierId: id } }),
+    prisma.supplier.delete({ where: { id } }),
+  ]);
 
   revalidatePath("/suppliers");
   revalidatePath("/purchases");
   revalidatePath("/reports/suppliers");
-  return { ok: "Supplier deleted." };
+  const removed =
+    purchasesCount > 0 || paymentsCount > 0
+      ? ` Removed ${purchasesCount} purchase(s) and ${paymentsCount} payment(s).`
+      : "";
+  return { ok: `Supplier deleted.${removed}` };
 }
 
 export async function createSupplierPayment(
@@ -116,8 +134,8 @@ export async function createSupplierPayment(
   if (!dateStr) return { error: "Date is required." };
   if (!amountStr) return { error: "Amount is required." };
 
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount <= 0)
+  const amount = parseSignedPaymentAmount(formData);
+  if (amount === null)
     return { error: "Amount must be a positive number." };
 
   const date = parseDateInput(dateStr);

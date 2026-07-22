@@ -79,7 +79,8 @@ export function DeleteSupplierButton({
               <span className="font-semibold text-neutral-900 dark:text-neutral-50">
                 {supplierName}
               </span>
-              ? This cannot be undone.
+              ? All of their purchases and payments will be permanently deleted
+              too. This cannot be undone.
             </p>
             {state.error && (
               <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">

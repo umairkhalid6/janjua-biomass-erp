@@ -183,6 +183,15 @@ export function CustomerPaymentForm({ customerId }: { customerId: string }) {
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Type
+        </label>
+        <select name="direction" defaultValue="CR" className={input}>
+          <option value="CR">Credit — payment received / advance</option>
+          <option value="DR">Debit — charge / adjustment</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Method
         </label>
         <select name="method" defaultValue="Cash" className={input}>
@@ -257,9 +266,22 @@ export function EditCustomerPaymentForm({ existing }: { existing: PaymentRow }) 
           step="0.01"
           min="0.01"
           required
-          defaultValue={existing.amount}
+          defaultValue={Math.abs(existing.amount)}
           className={input}
         />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Type
+        </label>
+        <select
+          name="direction"
+          defaultValue={existing.amount < 0 ? "DR" : "CR"}
+          className={input}
+        >
+          <option value="CR">Credit — payment received / advance</option>
+          <option value="DR">Debit — charge / adjustment</option>
+        </select>
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">

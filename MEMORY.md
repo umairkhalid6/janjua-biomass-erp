@@ -433,3 +433,24 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   `AUTH_URL=http://localhost:3015`). preview_click/preview_fill synthetic events still don't reach
   React handlers — drive via `preview_eval` (`el.click()` / `form.requestSubmit()` / native value
   setter + dispatched change event).
+
+### Payment Credit/Debit selector + cascade delete for customers/suppliers (2026-07-22)
+- **Credit/Debit direction on payments:** customer & supplier payment forms (create + customer
+  edit) now carry a `direction` select (`CR`/`DR`, default `CR`) instead of relying on typed
+  signs. `parseSignedPaymentAmount` in each `actions.ts` reads an unsigned amount + direction and
+  stores a **signed** `amount`: Credit → positive (normal receipt/payment, lands in the ledger's
+  Received/Paid column, reduces balance), Debit → negative (charge/adjustment, lands in
+  Billed/Purchased column, increases balance). No migration/view change needed — the ledger views
+  already do `-amount` and split into debit/credit columns, so signed amounts flow through
+  correctly. Edit form derives the default direction from `amount < 0` and shows `Math.abs`.
+  Mirrors the existing `parseOpeningBalance` pattern.
+- **Side effect:** the "Total Received/Paid" summary card is `SUM(amount)`, so a debit-only
+  customer shows a negative total (nets out once real credits exist). Ledger rows are always
+  correct.
+- **Delete without clearing transactions first:** `deleteCustomer`/`deleteSupplier` no longer
+  block on existing sales/purchases/payments. They now run a `$transaction` deleting
+  payments → sales/purchases → the entity (payments first so the payment→sale/purchase SET NULL
+  link never mid-transaction orphans). Confirm dialogs warn that all transactions are permanently
+  removed too. Verified end-to-end: debit entry increases balance in the UI; cascade transaction
+  passes against real FK RESTRICT constraints for both customer and supplier (incl. linked +
+  signed-debit payments).
