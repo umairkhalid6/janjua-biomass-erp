@@ -40,7 +40,9 @@ export default async function SuppliersReportPage({
     FROM suppliers s
     JOIN v_supplier_summary ss ON ss.supplier_id = s.id
     LEFT JOIN (
-      SELECT "supplierId", SUM("materialCost" + "handlingCost") AS total
+      -- Payable to suppliers is material cost only; handling cost is the
+      -- owner's own expense (see /reports/handling).
+      SELECT "supplierId", SUM("materialCost") AS total
       FROM material_purchases
       WHERE date >= ${gte}::date AND date <= ${lte}::date
       GROUP BY 1
@@ -73,7 +75,7 @@ export default async function SuppliersReportPage({
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Suppliers</h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            Purchases &amp; payments — {periodLabel(period).toLowerCase()}. Balance owed is all-time.
+            Material purchases (payable) &amp; payments — {periodLabel(period).toLowerCase()}. Balance owed is all-time; handling costs are in the Handling Costs report.
           </p>
         </div>
         <Suspense>
@@ -87,7 +89,7 @@ export default async function SuppliersReportPage({
             <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
               <tr>
                 <th className="px-4 py-3 font-medium">Supplier</th>
-                <th className="px-4 py-3 text-right font-medium">Purchased</th>
+                <th className="px-4 py-3 text-right font-medium">Purchased (material)</th>
                 <th className="px-4 py-3 text-right font-medium">Paid</th>
                 <th className="px-4 py-3 text-right font-medium">Balance Owed (all-time)</th>
               </tr>

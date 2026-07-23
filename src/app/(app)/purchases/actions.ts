@@ -53,15 +53,20 @@ export async function createPurchase(
     return { error: "Handling cost must be non-negative number." };
 
   // Paid in full is the default (the common case at the counter) and settles
-  // the whole order alongside the purchase. The UNPAID branch may still carry
-  // an optional partial amount paid now; the rest goes on the balance.
+  // the payable (material) portion alongside the purchase. Handling cost is
+  // the owner's own expense — never owed to the supplier — so payments are
+  // capped at material cost. The UNPAID branch may still carry an optional
+  // partial amount paid now; the rest goes on the balance.
   const isPaid = paymentStatus === "PAID";
   const total = materialCost + handlingCost;
-  const amountPaid = isPaid ? total : parseFloat(amountPaidStr || "0");
+  const amountPaid = isPaid ? materialCost : parseFloat(amountPaidStr || "0");
   if (isNaN(amountPaid) || amountPaid < 0)
     return { error: "Amount paid must be zero or a positive number." };
-  if (amountPaid > total)
-    return { error: "Amount paid cannot exceed the order total." };
+  if (amountPaid > materialCost)
+    return {
+      error:
+        "Amount paid cannot exceed the material cost — handling cost is your own expense, not payable to the supplier.",
+    };
 
   const date = parseDateInput(dateStr);
   const ratePerKg = total / weightKg;

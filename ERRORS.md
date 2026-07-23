@@ -121,3 +121,8 @@ The old Google Sheets workbook had these calculation errors, which the SQL views
 3. Multiple SUM ranges excluded trailing data rows (e.g. production on the 31st of the month was not counted in monthly totals).
 4. "Average Rate/KG" label on the Main sheet actually showed rate per 40-kg bag.
 Numbers from the new system will intentionally differ from the old sheet wherever these bugs applied.
+
+## 2026-07-23 — Port 3010 occupied by an unrelated project; ERP dev auth lives on 3011
+**Error:** `docker compose up app` fails with `bind: address already in use` on 3010, and browsing localhost:3010 shows a different app ("Robin Fi" dev server), not the ERP.
+**Cause:** Another local project's node dev server was already listening on 3010. Also note the npm `dev` script hardcodes `AUTH_URL=http://localhost:3011 next dev -p 3011`, so launch configs that pass `-p <other-port>` (erp-dev, erp-dev-localauth) get their shell `AUTH_URL` overridden by the script's inline value and redirect logins to 3011.
+**Fix:** For local verification, run the `erp-dev-auto` launch config (plain `npm run dev`) and use http://localhost:3011 — port and AUTH_URL agree there. Only the postgres container (5433) is needed from compose.

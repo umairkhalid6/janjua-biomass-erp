@@ -62,11 +62,12 @@ export default async function SupplierDetailPage({
 
   // Only purchases still owing something can be picked in "Apply to" — a
   // settled purchase has nothing left for a new payment to apply against.
+  // Payable is material cost only; handling is the owner's own expense.
   const purchaseOptions = purchases
     .map((p) => {
-      const total = p.materialCost.toNumber() + p.handlingCost.toNumber();
+      const payable = p.materialCost.toNumber();
       const paid = p.payments.reduce((s, pay) => s + pay.amount.toNumber(), 0);
-      const outstanding = total - paid;
+      const outstanding = payable - paid;
       return {
         id: p.id,
         label: `${MATERIAL_LABELS[p.materialType] ?? p.materialType} — ${formatDate(
@@ -166,7 +167,9 @@ export default async function SupplierDetailPage({
           <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-50">
             {formatPKR(totalPurchased)}
           </p>
-          <p className="mt-0.5 text-xs text-neutral-500">All time</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Material cost (payable) — all time
+          </p>
         </div>
 
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">

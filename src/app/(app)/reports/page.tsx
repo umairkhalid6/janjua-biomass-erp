@@ -8,6 +8,7 @@ const REPORTS: { href: string; title: string; desc: string }[] = [
   { href: "/reports/contractor", title: "Contractor Ledger", desc: "Thekadar running balance, payments vs earned." },
   { href: "/reports/customers", title: "Customers", desc: "Sales totals per customer." },
   { href: "/reports/suppliers", title: "Suppliers", desc: "Purchases, payments and balance owed per supplier." },
+  { href: "/reports/handling", title: "Handling Costs", desc: "Unloading / gari expenses by material, supplier and month." },
 ];
 
 export default async function ReportsPage() {

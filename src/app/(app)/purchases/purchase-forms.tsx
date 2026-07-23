@@ -298,6 +298,9 @@ function PurchaseForm({
           onChange={(e) => setHandlingCost(e.target.value)}
           className={input}
         />
+        <p className="mt-1 text-[11px] text-neutral-400">
+          Your own unloading/gari expense — not payable to the supplier.
+        </p>
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -319,6 +322,15 @@ function PurchaseForm({
         <span className="ml-2 text-xs text-neutral-400">
           (Material + Handling) ÷ Weight
         </span>
+        {!isNaN(mc) && mc > 0 && (
+          <p className="mt-1 text-xs text-neutral-500">
+            Payable to supplier:{" "}
+            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+              {formatRate(mc)}
+            </span>{" "}
+            (material only)
+          </p>
+        )}
       </div>
       {!existing && (
         <>
@@ -335,7 +347,8 @@ function PurchaseForm({
               className={input}
             >
               <option value="PAID">
-                Paid in full{total > 0 ? ` — ${formatRate(total)}` : ""}
+                Paid in full
+                {!isNaN(mc) && mc > 0 ? ` — ${formatRate(mc)} (material)` : ""}
               </option>
               <option value="UNPAID">Unpaid / partial — on balance</option>
             </select>
@@ -366,9 +379,9 @@ function PurchaseForm({
                 className={input}
               />
               <p className="mt-1 text-[11px] text-neutral-400">
-                Leave empty if nothing was paid — the full amount goes on the
+                Leave empty if nothing was paid — the material cost goes on the
                 supplier&apos;s balance. Enter a smaller amount for a partial
-                payment.
+                payment. Handling cost is never owed to the supplier.
               </p>
             </div>
           )}

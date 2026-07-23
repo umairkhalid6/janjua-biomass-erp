@@ -454,3 +454,21 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   removed too. Verified end-to-end: debit entry increases balance in the UI; cascade transaction
   passes against real FK RESTRICT constraints for both customer and supplier (incl. linked +
   signed-debit payments).
+
+### Supplier payables are material cost only; handling cost is the owner's expense (2026-07-23)
+- **Business rule:** the owner owes suppliers only `materialCost`. `handlingCost` (unloading/gari)
+  is paid by the owner to laborers/transporters and is never part of the supplier balance. It DOES
+  still count toward total landed cost: `ratePerKg = (material + handling) / weight`, P&L,
+  materials report, dashboard and `v_material_totals`/`v_monthly_summary`/`v_daily_summary` all
+  keep `materialCost + handlingCost`.
+- **Migration `20260723120000_supplier_payable_material_only`:** rebuilt `v_supplier_ledger`
+  (PURCHASE debit = `materialCost` only) and `v_supplier_summary` (`total_purchased` =
+  `SUM(materialCost)`), plus an owner-approved one-time data fix reducing purchase-linked
+  payments by that purchase's handling cost (guarded by `amount > materialCost`; zeroed rows
+  deleted) so historical PAID purchases don't show suppliers as overpaid.
+- **TS payable sites** (all now material-only): `purchases/actions.ts` inline-payment autofill +
+  `amountPaid <= materialCost` validation; purchases page badge & "Payable (Mat.)" column;
+  supplier detail "Apply to" outstanding; `reports/suppliers` windowed Purchased sum.
+- **New report `/reports/handling`:** period totals, handling share %, by material (with
+  handling/kg), by supplier, trailing-6-month table, recent purchases with handling. Linked from
+  the reports index.

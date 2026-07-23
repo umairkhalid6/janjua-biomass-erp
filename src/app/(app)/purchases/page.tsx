@@ -77,9 +77,11 @@ export default async function PurchasesPage({
     const storedRate = p.ratePerKg.toNumber();
     const ratePerKg =
       storedRate > 0 ? storedRate : weightKg > 0 ? total / weightKg : 0;
+    // Payable to the supplier is material cost only — handling is the owner's
+    // own expense, so the badge compares payments against material cost.
     const paid = p.payments.reduce((s, pay) => s + pay.amount.toNumber(), 0);
     const paymentStatus: "paid" | "partial" | "unpaid" =
-      paid >= total - 0.005 ? "paid" : paid > 0.005 ? "partial" : "unpaid";
+      paid >= matCost - 0.005 ? "paid" : paid > 0.005 ? "partial" : "unpaid";
     return {
       id: p.id,
       date: toDateInputValue(p.date),
@@ -184,7 +186,7 @@ export default async function PurchasesPage({
                 <th className="px-4 py-3 font-medium">Material</th>
                 <th className="px-4 py-3 font-medium">Supplier</th>
                 <th className="px-4 py-3 font-medium text-right">Weight (kg)</th>
-                <th className="px-4 py-3 font-medium text-right">Mat. Cost</th>
+                <th className="px-4 py-3 font-medium text-right">Payable (Mat.)</th>
                 <th className="px-4 py-3 font-medium text-right">Handling</th>
                 <th className="px-4 py-3 font-medium text-right">Total</th>
                 <th className="px-4 py-3 font-medium text-right">Rate/kg</th>
