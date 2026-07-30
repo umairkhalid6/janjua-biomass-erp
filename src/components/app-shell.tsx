@@ -7,8 +7,15 @@ import type { NavItem } from "@/components/nav-items";
 
 type ShellUser = { name: string; role: string };
 
-function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+// The longest matching href wins so nested items ("/suppliers/new") don't
+// also light up their parent ("/suppliers").
+function activeHref(pathname: string, items: NavItem[]): string | null {
+  let best: string | null = null;
+  for (const { href } of items) {
+    const match = href === "/" ? pathname === "/" : pathname.startsWith(href);
+    if (match && (best === null || href.length > best.length)) best = href;
+  }
+  return best;
 }
 
 export function AppShell({
@@ -25,9 +32,11 @@ export function AppShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  const current = activeHref(pathname, items);
+
   const navLinks = (onClick?: () => void) =>
     items.map((item) => {
-      const active = isActive(pathname, item.href);
+      const active = item.href === current;
       return (
         <Link
           key={item.href}

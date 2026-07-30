@@ -65,10 +65,28 @@ function SupplierFields({ existing }: { existing?: SupplierRow }) {
           name="openingBalance"
           type="number"
           step="0.01"
-          defaultValue={existing ? existing.openingBalance ?? 0 : undefined}
+          min="0"
+          defaultValue={
+            existing ? Math.abs(existing.openingBalance ?? 0) : undefined
+          }
           placeholder="0.00"
           className={input}
         />
+      </div>
+      {/* Spans two columns so the direction labels stay readable in the
+          4-column create layout as well as the 2-column edit dialog. */}
+      <div className="sm:col-span-2">
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Opening Balance Type
+        </label>
+        <select
+          name="openingBalanceType"
+          defaultValue={(existing?.openingBalance ?? 0) < 0 ? "CR" : "DR"}
+          className={input}
+        >
+          <option value="DR">We owe supplier — unpaid bill</option>
+          <option value="CR">Advance already paid — supplier holds it</option>
+        </select>
       </div>
     </>
   );
@@ -126,15 +144,7 @@ export function EditSupplierForm({ existing }: { existing: SupplierRow }) {
 
 const METHODS = ["Cash", "Bank", "Cheque", "Online"];
 
-type PurchaseOption = { id: string; label: string };
-
-export function SupplierPaymentForm({
-  supplierId,
-  purchases = [],
-}: {
-  supplierId: string;
-  purchases?: PurchaseOption[];
-}) {
+export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
   const [state, action] = useActionState<ActionState, FormData>(
     createSupplierPayment,
     {}
@@ -187,19 +197,6 @@ export function SupplierPaymentForm({
           {METHODS.map((m) => (
             <option key={m} value={m}>
               {m}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Apply to (optional)
-        </label>
-        <select name="purchaseId" defaultValue="" className={input}>
-          <option value="">General payment (advance / previous balance)</option>
-          {purchases.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
             </option>
           ))}
         </select>

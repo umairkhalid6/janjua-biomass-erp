@@ -141,21 +141,45 @@ export async function updatePurchase(
   const date = parseDateInput(dateStr);
   const ratePerKg = (materialCost + handlingCost) / weightKg;
 
-  await prisma.materialPurchase.update({
+  const existing = await prisma.materialPurchase.findUnique({
     where: { id },
-    data: {
-      date,
-      materialType,
-      supplierId,
-      weightKg,
-      materialCost,
-      handlingCost,
-      ratePerKg,
-      notes: notes || null,
-    },
+    select: { supplierId: true },
+  });
+  if (!existing) return { error: "Purchase not found." };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.materialPurchase.update({
+      where: { id },
+      data: {
+        date,
+        materialType,
+        supplierId,
+        weightKg,
+        materialCost,
+        handlingCost,
+        ratePerKg,
+        notes: notes || null,
+      },
+    });
+
+    // Payments logged against this purchase belong to whoever supplied it, so
+    // move them when the supplier is reassigned — otherwise the old supplier
+    // keeps the credit while the purchase lands on the new supplier's ledger.
+    if (existing.supplierId !== supplierId) {
+      await tx.supplierPayment.updateMany({
+        where: { purchaseId: id },
+        data: { supplierId },
+      });
+    }
   });
 
   revalidatePath("/purchases");
+  revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${supplierId}`);
+  if (existing.supplierId !== supplierId)
+    revalidatePath(`/suppliers/${existing.supplierId}`);
+  revalidatePath("/reports/suppliers");
+
   return { ok: "Purchase updated." };
 }
 
@@ -163,6 +187,16 @@ export async function deletePurchase(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const purchase = await prisma.materialPurchase.findUnique({
+    where: { id },
+    select: { supplierId: true },
+  });
+  if (!purchase) return;
   await prisma.materialPurchase.delete({ where: { id } });
+  // Removing a purchase re-ranks FIFO settlement for the supplier's other
+  // purchases, so their pages must refresh too.
   revalidatePath("/purchases");
+  revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${purchase.supplierId}`);
+  revalidatePath("/reports/suppliers");
 }

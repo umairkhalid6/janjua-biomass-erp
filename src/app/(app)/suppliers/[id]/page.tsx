@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, toDateInputValue } from "@/lib/format";
-import { MATERIAL_LABELS } from "@/lib/constants";
+import { EPSILON } from "@/lib/money";
+import { BalanceBadge } from "@/components/balance-badge";
 import { DeleteButton } from "@/components/delete-button";
 import { foldInstantPayments } from "@/lib/ledger";
 import { SupplierPaymentForm } from "../supplier-forms";
@@ -60,29 +61,14 @@ export default async function SupplierDetailPage({
     }),
   ]);
 
-  // Only purchases still owing something can be picked in "Apply to" — a
-  // settled purchase has nothing left for a new payment to apply against.
-  // Payable is material cost only; handling is the owner's own expense.
-  const purchaseOptions = purchases
-    .map((p) => {
-      const payable = p.materialCost.toNumber();
-      const paid = p.payments.reduce((s, pay) => s + pay.amount.toNumber(), 0);
-      const outstanding = payable - paid;
-      return {
-        id: p.id,
-        label: `${MATERIAL_LABELS[p.materialType] ?? p.materialType} — ${formatDate(
-          toDateInputValue(p.date)
-        )} — ${formatPKR(outstanding)} owed`,
-        outstanding,
-      };
-    })
-    .filter((p) => p.outstanding > 0.005)
-    .map(({ id: pid, label }) => ({ id: pid, label }));
-
   const summary = summaryRows[0];
   const balanceOwed = summary ? Number(summary.balance_owed) : 0;
   const totalPurchased = summary ? Number(summary.total_purchased) : 0;
   const totalPaid = summary ? Number(summary.total_paid) : 0;
+  // Shown as its own card when non-zero, otherwise the other three figures
+  // look like they don't add up: opening + purchased − paid = balance.
+  const openingBalance = summary ? Number(summary.opening_balance) : 0;
+  const hasOpening = Math.abs(openingBalance) > EPSILON;
 
   // A payment recorded together with its purchase (linked, same date) reads as
   // one event to the owner — fold it into the purchase row instead of showing
@@ -122,9 +108,12 @@ export default async function SupplierDetailPage({
           >
             ← Suppliers
           </Link>
-          <h1 className="mt-1 text-xl font-bold text-neutral-900 dark:text-neutral-50">
-            {supplier.name}
-          </h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
+              {supplier.name}
+            </h1>
+            <BalanceBadge balance={balanceOwed} />
+          </div>
           {supplier.phone && (
             <p className="text-sm text-neutral-500">{supplier.phone}</p>
           )}
@@ -134,31 +123,65 @@ export default async function SupplierDetailPage({
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Summary cards — opening + purchased − paid = balance */}
+      <div
+        className={`grid gap-4 ${
+          hasOpening ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"
+        }`}
+      >
         <div
           className={`rounded-xl border p-4 ${
-            balanceOwed > 0
+            balanceOwed > EPSILON
               ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+              : balanceOwed < -EPSILON
+              ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
               : "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
           }`}
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Balance Owed
+            {balanceOwed < -EPSILON ? "Advance" : "Balance Owed"}
           </p>
           <p
             className={`mt-1 text-2xl font-bold ${
-              balanceOwed > 0
+              balanceOwed > EPSILON
                 ? "text-amber-800 dark:text-amber-400"
+                : balanceOwed < -EPSILON
+                ? "text-green-700 dark:text-green-400"
                 : "text-neutral-900 dark:text-neutral-50"
             }`}
           >
-            {formatPKR(balanceOwed)}
+            {formatPKR(Math.abs(balanceOwed))}
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
-            {balanceOwed > 0 ? "We owe this supplier" : "Fully settled"}
+            {balanceOwed > EPSILON
+              ? "We owe this supplier"
+              : balanceOwed < -EPSILON
+              ? "Advance held by supplier"
+              : "Fully settled"}
           </p>
         </div>
+
+        {hasOpening && (
+          <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Opening Balance
+            </p>
+            <p
+              className={`mt-1 text-2xl font-bold ${
+                openingBalance < 0
+                  ? "text-green-700 dark:text-green-400"
+                  : "text-amber-800 dark:text-amber-400"
+              }`}
+            >
+              {formatPKR(Math.abs(openingBalance))}
+            </p>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              {openingBalance < 0
+                ? "Advance carried in"
+                : "Already owed when added"}
+            </p>
+          </div>
+        )}
 
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -179,7 +202,11 @@ export default async function SupplierDetailPage({
           <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
             {formatPKR(totalPaid)}
           </p>
-          <p className="mt-0.5 text-xs text-neutral-500">Payments made</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            {hasOpening
+              ? "Payments made — excludes opening"
+              : "Payments made"}
+          </p>
         </div>
       </div>
 
@@ -188,7 +215,7 @@ export default async function SupplierDetailPage({
         <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
           Record Payment
         </h2>
-        <SupplierPaymentForm supplierId={id} purchases={purchaseOptions} />
+        <SupplierPaymentForm supplierId={id} />
       </section>
 
       {/* Ledger table */}
@@ -253,9 +280,15 @@ export default async function SupplierDetailPage({
                       >
                         {row.description}
                       </span>
+                      {/* Records only that money changed hands when this
+                          purchase was entered — never whether the purchase is
+                          settled. Settlement is FIFO across the whole account
+                          (v_purchase_settlement drives the Purchases badge), so
+                          judging it from this row's own payment would
+                          contradict it. */}
                       {row.foldedPaymentIds.length > 0 && (
                         <span className="ml-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-                          {row.credit >= row.debit ? "Paid" : "Part paid"} —{" "}
+                          Paid at entry —{" "}
                           {row.foldedPaymentIds
                             .map((pid) => paymentMethodById.get(pid) ?? "Cash")
                             .join(", ")}

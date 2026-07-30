@@ -7,6 +7,18 @@ import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string; id?: string };
 
+// Opening balance is stored signed: positive = we owe the supplier (a payable
+// carried from the old sheets), negative = an advance we already paid them.
+// The form submits an unsigned amount plus an explicit direction so entering
+// an advance can never be misread as a debt — the sign always comes from the
+// selected direction, never from a typed minus.
+function parseOpeningBalance(formData: FormData): number {
+  const amountStr = String(formData.get("openingBalance") ?? "0").trim();
+  const direction = String(formData.get("openingBalanceType") ?? "DR").trim();
+  const amount = Math.abs(Number(amountStr) || 0);
+  return direction === "CR" ? -amount : amount;
+}
+
 // Payment amount is entered unsigned with an explicit Credit/Debit direction.
 // "Credit" is the normal payment/advance — it lands in the ledger's "Paid"
 // column and reduces what we owe, so it is stored positive (the ledger negates
@@ -29,11 +41,10 @@ export async function createSupplier(
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
-  const openingBalanceStr = String(formData.get("openingBalance") ?? "0").trim();
 
   if (!name) return { error: "Supplier name is required." };
 
-  const openingBalance = Number(openingBalanceStr) || 0;
+  const openingBalance = parseOpeningBalance(formData);
 
   const created = await prisma.supplier.create({
     data: {
@@ -59,12 +70,11 @@ export async function updateSupplier(
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
-  const openingBalanceStr = String(formData.get("openingBalance") ?? "0").trim();
 
   if (!id) return { error: "Supplier ID missing." };
   if (!name) return { error: "Supplier name is required." };
 
-  const openingBalance = Number(openingBalanceStr) || 0;
+  const openingBalance = parseOpeningBalance(formData);
 
   await prisma.supplier.update({
     where: { id },
@@ -128,7 +138,6 @@ export async function createSupplierPayment(
   const amountStr = String(formData.get("amount") ?? "").trim();
   const method = String(formData.get("method") ?? "Cash").trim();
   const notes = String(formData.get("notes") ?? "").trim();
-  const purchaseId = String(formData.get("purchaseId") ?? "").trim();
 
   if (!supplierId) return { error: "Supplier ID missing." };
   if (!dateStr) return { error: "Date is required." };
@@ -147,9 +156,9 @@ export async function createSupplierPayment(
       amount,
       method: method || "Cash",
       notes: notes || null,
-      // Empty string means "general payment" — leave unlinked so it applies
-      // to the running balance rather than one specific purchase.
-      purchaseId: purchaseId || null,
+      // Always unlinked: payments settle the running balance FIFO-style, so
+      // there is nothing to point at a specific purchase anymore. (Linked
+      // rows still exist for pay-at-purchase entries, purely for display.)
     },
   });
 

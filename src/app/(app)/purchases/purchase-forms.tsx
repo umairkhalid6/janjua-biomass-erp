@@ -178,7 +178,7 @@ function PurchaseForm({
   const [handlingCost, setHandlingCost] = useState(
     existing ? String(existing.handlingCost) : ""
   );
-  const [paymentStatus, setPaymentStatus] = useState<"UNPAID" | "PAID">(
+  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">(
     "PAID"
   );
   const [formKey, setFormKey] = useState(0);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 
 const REPORTS: { href: string; title: string; desc: string }[] = [
+  { href: "/reports/overview", title: "Business Overview", desc: "Everything on one page: P&L, production, costs, contractor, electricity." },
   { href: "/reports/pnl", title: "Profit & Loss", desc: "Monthly P&L, cost breakdown and 12-month profit history." },
   { href: "/reports/production", title: "Production", desc: "Daily day/night output, monthly totals and trend." },
   { href: "/reports/materials", title: "Materials", desc: "Per-material weight, cost and average rate per kg." },

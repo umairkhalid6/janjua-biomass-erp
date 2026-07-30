@@ -31,11 +31,18 @@ type PurchaseSearchParams = {
   month?: string;
   material?: string;
   supplier?: string;
+  status?: string;
   minRate?: string;
   maxRate?: string;
   q?: string;
   page?: string;
 };
+
+const STATUS_OPTIONS = [
+  { value: "paid", label: "Paid" },
+  { value: "partial", label: "Partial" },
+  { value: "unpaid", label: "Unpaid" },
+];
 
 export default async function PurchasesPage({
   searchParams,
@@ -49,24 +56,43 @@ export default async function PurchasesPage({
   const { gte, lte } = monthRange(month);
 
   const supplierId = sp.supplier ?? null;
+  const status =
+    sp.status === "paid" || sp.status === "partial" || sp.status === "unpaid"
+      ? sp.status
+      : null;
   const minRate = parseNumberParam(sp.minRate);
   const maxRate = parseNumberParam(sp.maxRate);
   const notesQuery = sp.q?.trim().toLowerCase() ?? "";
   const hasFilters = Boolean(
-    supplierId || minRate !== null || maxRate !== null || notesQuery
+    supplierId || status || minRate !== null || maxRate !== null || notesQuery
   );
 
-  const [purchases, suppliers] = await Promise.all([
+  const [purchases, suppliers, settlementRows] = await Promise.all([
     prisma.materialPurchase.findMany({
       where: {
         date: { gte, lte },
         ...(material ? { materialType: material } : {}),
       },
-      include: { supplier: true, payments: true },
+      include: { supplier: true },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
+    // FIFO settlement: each supplier's payments pour over their purchases
+    // oldest-first (opening balance first), regardless of which purchase a
+    // payment row happens to be linked to — so an advance or a lump-sum
+    // clearing payment flips the right badges automatically.
+    prisma.$queryRaw<{ purchase_id: string; status: string }[]>`
+      SELECT purchase_id, status FROM v_purchase_settlement
+      WHERE date >= ${gte} AND date <= ${lte}
+    `,
   ]);
+
+  const statusById = new Map(
+    settlementRows.map((r) => [
+      r.purchase_id,
+      r.status as "paid" | "partial" | "unpaid",
+    ])
+  );
 
   const rows = purchases.map((p) => {
     const matCost = p.materialCost.toNumber();
@@ -78,10 +104,8 @@ export default async function PurchasesPage({
     const ratePerKg =
       storedRate > 0 ? storedRate : weightKg > 0 ? total / weightKg : 0;
     // Payable to the supplier is material cost only — handling is the owner's
-    // own expense, so the badge compares payments against material cost.
-    const paid = p.payments.reduce((s, pay) => s + pay.amount.toNumber(), 0);
-    const paymentStatus: "paid" | "partial" | "unpaid" =
-      paid >= matCost - 0.005 ? "paid" : paid > 0.005 ? "partial" : "unpaid";
+    // own expense. Status comes from the FIFO settlement view.
+    const paymentStatus = statusById.get(p.id) ?? "unpaid";
     return {
       id: p.id,
       date: toDateInputValue(p.date),
@@ -101,6 +125,7 @@ export default async function PurchasesPage({
   const filtered = rows.filter(
     (r) =>
       (!supplierId || r.supplierId === supplierId) &&
+      (!status || r.paymentStatus === status) &&
       (minRate === null || r.ratePerKg >= minRate) &&
       (maxRate === null || r.ratePerKg <= maxRate) &&
       (!notesQuery || (r.notes ?? "").toLowerCase().includes(notesQuery))
@@ -161,6 +186,12 @@ export default async function PurchasesPage({
               }))}
               allLabel="All suppliers"
             />
+            <FilterSelect
+              paramName="status"
+              value={status ?? ""}
+              options={STATUS_OPTIONS}
+              allLabel="Any payment"
+            />
             <FilterRange
               minParam="minRate"
               maxParam="maxRate"
@@ -174,7 +205,9 @@ export default async function PurchasesPage({
               placeholder="Search notes"
             />
             {hasFilters && (
-              <ResetFilters params={["supplier", "minRate", "maxRate", "q"]} />
+              <ResetFilters
+                params={["supplier", "status", "minRate", "maxRate", "q"]}
+              />
             )}
           </Suspense>
         </div>

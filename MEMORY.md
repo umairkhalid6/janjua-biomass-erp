@@ -32,6 +32,37 @@ Update it as significant decisions are made.
 - `next.config.ts` uses `output: 'standalone'` for Docker image compatibility.
 - All config via env vars — no hardcoded hostnames or secrets.
 
+### Supplier payments — FIFO settlement (2026-07-30)
+- Per-purchase Paid/Partial/Unpaid is **derived by FIFO settlement**, not by payment↔purchase
+  links: pool = all supplier payments; a positive opening balance consumes the pool first, a
+  negative one (advance) adds to it; the remainder pours over purchases oldest-first.
+  Computed in the `v_purchase_settlement` view
+  (`prisma/migrations/20260730120000_purchase_fifo_settlement/`).
+- `SupplierPayment.purchaseId` is **display-only** now (ledger row description + same-date
+  folding of pay-at-purchase entries). Never use it to compute status. The "Apply to" dropdown
+  on the supplier payment form was removed; `createSupplierPayment` always writes unlinked rows.
+- The Edit Purchase form no longer touches payments; payments are recorded at purchase
+  creation ("amount paid now") or on the supplier detail page, and deleted from the ledger.
+- Supplier balances are three-state everywhere: Owed (+) / Advance (−) / Clear, rendered via
+  `src/components/balance-badge.tsx`; shared epsilon/rounding live in `src/lib/money.ts`.
+- **One question, one answer.** Nothing else may compute a Paid/Partial/Unpaid verdict from a
+  single row's own payments — that contradicts FIFO. The folded pay-at-purchase chip in the
+  supplier ledger says "Paid at entry — <method>" (it records that money changed hands, not
+  that the purchase is settled); it used to say "Part paid" and disagreed with the Purchases
+  badge for the same purchase.
+- **Summary figures must reconcile on screen.** The supplier detail cards show an Opening
+  Balance card whenever it is non-zero, because Purchased − Paid alone contradicts the balance
+  when an opening advance/debt exists (opening + purchased − paid = balance).
+- FIFO's same-day tiebreaker is `id`, matching `v_supplier_ledger`'s `(date, sort_order,
+  entry_id)` — not `createdAt`, which could allocate same-day purchases in a different order
+  than the ledger displays. See migration `20260730160000_fifo_order_matches_ledger`.
+- **Signed-amount fields never ask the user to type a minus.** `Supplier.openingBalance` is
+  stored signed (positive = we owe them, negative = advance they hold), but the form submits an
+  unsigned amount plus an explicit direction select (`openingBalanceType` DR/CR) and
+  `parseOpeningBalance()` applies the sign — mirroring the customers side and the payment
+  form's CR/DR. A bare signed number field caused a real misentry (an advance recorded as a
+  debt), so keep the direction selector on any new signed-money field.
+
 ---
 
 ## Domain Vocabulary
@@ -472,3 +503,33 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 - **New report `/reports/handling`:** period totals, handling share %, by material (with
   handling/kg), by supplier, trailing-6-month table, recent purchases with handling. Linked from
   the reports index.
+
+### Suppliers nav split: Add Supplier vs Supplier Ledger (2026-07-23)
+- Sidebar now has two supplier items: **Add Supplier** → `/suppliers/new` (create form only)
+  and **Supplier Ledger** → `/suppliers` (per-supplier table: total purchased, total paid,
+  balance owed + totals footer; name links to `/suppliers/[id]` for the full ledger and
+  payment/adjustment entry). `AppShell` active-link logic changed from bare `startsWith` to
+  longest-matching-href so nested nav items don't double-highlight their parent.
+
+### Payment status is editable from the Edit Purchase modal (2026-07-30)
+- **Why it wasn't there:** payment status is *derived* (sum of `SupplierPayment` rows linked to the
+  purchase vs `materialCost`), not a stored column, so the edit form previously hid the payment
+  block entirely — only `createPurchase` could record a payment.
+- **UI:** the edit modal now has **Payment Status** (Paid in full / Partial / Unpaid) + **Payment
+  Method**, defaulting to the purchase's derived current status. Choosing Partial reveals "Total
+  paid on this purchase" — a *running total*, not an increment (the create form's `amountPaid`
+  means "paid now"; same field name, different semantics per action, documented in both).
+- **Reconciliation in `updatePurchase`:** the status names a target total. `diff = target - currentPaid`;
+  `diff > 0` creates one settlement payment (chosen method, purchase date), `diff < 0` trims the
+  purchase's linked payments **newest-first**, deleting rows fully consumed and reducing the last one
+  partially. Negative rows (debit adjustments) are skipped by the trim — deleting one would *raise*
+  the paid total. An absent `paymentStatus` field leaves payments untouched. Target is still capped
+  at `materialCost` (handling cost is never payable). All money rounded via `round2` before compare/write.
+- **Also fixed here (required by the above):** editing a purchase's supplier now moves its linked
+  payments to the new supplier (`updateMany`) — otherwise the old supplier kept the credit while the
+  purchase moved, and a subsequent "Paid in full" would double-count. `updatePurchase` now revalidates
+  `/suppliers`, both supplier detail pages and `/reports/suppliers`, not just `/purchases`.
+- **Verified** with a throwaway rollback-only harness against the real schema: 13 scenarios
+  (unpaid/partial/paid → each target, multi-row newest-first trim, debit-adjustment rows, supplier
+  reassignment, fractional amounts) all passed, DB left untouched. Modal not visually checked — it is
+  behind admin auth.

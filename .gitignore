@@ -46,3 +46,10 @@ next-env.d.ts
 /.next-preview/
 /.next-preview-2
 /.next-preview-3016/
+
+# local-only 3-month analysis seed (not for production)
+/tmp-seed/
+
+# database backups — real ledger data, never commit these
+*.dump
+*.sql.gz

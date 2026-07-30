@@ -3,7 +3,9 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatPKR } from "@/lib/format";
+import { EPSILON } from "@/lib/money";
 import { paginate } from "@/lib/pagination";
+import { BalanceBadge } from "@/components/balance-badge";
 import { EditDialog } from "@/components/edit-dialog";
 import { Pagination } from "@/components/pagination";
 import {
@@ -11,7 +13,7 @@ import {
   FilterSelect,
   ResetFilters,
 } from "@/components/table-filters";
-import { CreateSupplierForm, EditSupplierForm } from "./supplier-forms";
+import { EditSupplierForm } from "./supplier-forms";
 import { DeleteSupplierButton } from "./delete-supplier-button";
 
 type SupplierSummaryRow = {
@@ -29,6 +31,7 @@ type SupplierSummaryRow = {
 const BALANCE_OPTIONS = [
   { value: "owe", label: "We owe them" },
   { value: "clear", label: "Clear" },
+  { value: "advance", label: "They hold advance" },
 ];
 
 const SORT_OPTIONS = [
@@ -50,7 +53,9 @@ export default async function SuppliersPage({
 
   const query = sp.q?.trim().toLowerCase() ?? "";
   const balance =
-    sp.balance === "owe" || sp.balance === "clear" ? sp.balance : null;
+    sp.balance === "owe" || sp.balance === "clear" || sp.balance === "advance"
+      ? sp.balance
+      : null;
   const sort = sp.sort === "balance" ? "balance" : "name";
   const hasFilters = Boolean(query || balance);
 
@@ -61,15 +66,28 @@ export default async function SuppliersPage({
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
   ]);
 
-  // Build a lookup from summary for balance figures
+  // Build a lookup from summary for ledger figures (payables are material
+  // cost only; handling cost never enters supplier balances).
   const summaryById = new Map(
-    summaryRows.map((r) => [r.supplier_id, Number(r.balance_owed)])
+    summaryRows.map((r) => [
+      r.supplier_id,
+      {
+        balanceOwed: Number(r.balance_owed),
+        totalPurchased: Number(r.total_purchased),
+        totalPaid: Number(r.total_paid),
+      },
+    ])
   );
 
-  const list = suppliers.map((v) => ({
-    supplier: v,
-    balanceOwed: summaryById.get(v.id) ?? 0,
-  }));
+  const list = suppliers.map((v) => {
+    const s = summaryById.get(v.id);
+    return {
+      supplier: v,
+      balanceOwed: s?.balanceOwed ?? 0,
+      totalPurchased: s?.totalPurchased ?? 0,
+      totalPaid: s?.totalPaid ?? 0,
+    };
+  });
 
   const filtered = list.filter(({ supplier: v, balanceOwed }) => {
     if (
@@ -80,8 +98,11 @@ export default async function SuppliersPage({
       )
     )
       return false;
-    if (balance === "owe" && !(balanceOwed > 0.005)) return false;
-    if (balance === "clear" && balanceOwed > 0.005) return false;
+    // Three-way split: a negative balance is an advance we hold with the
+    // supplier — not "clear" (mirrors the customers page semantics).
+    if (balance === "owe" && !(balanceOwed > EPSILON)) return false;
+    if (balance === "clear" && Math.abs(balanceOwed) > EPSILON) return false;
+    if (balance === "advance" && !(balanceOwed < -EPSILON)) return false;
     return true;
   });
 
@@ -91,23 +112,30 @@ export default async function SuppliersPage({
 
   const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
-          Suppliers
-        </h1>
-        <p className="mt-0.5 text-sm text-neutral-500">
-          Manage supplier records.
-        </p>
-      </div>
+  // Totals cover every filtered row, not just the visible page.
+  const sumPurchased = filtered.reduce((s, r) => s + r.totalPurchased, 0);
+  const sumPaid = filtered.reduce((s, r) => s + r.totalPaid, 0);
+  const sumOwed = filtered.reduce((s, r) => s + r.balanceOwed, 0);
 
-      <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-          Add Supplier
-        </h2>
-        <CreateSupplierForm />
-      </section>
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
+            Supplier Ledger
+          </h1>
+          <p className="mt-0.5 text-sm text-neutral-500">
+            Click a supplier to see the full ledger or record a payment /
+            adjustment. Purchased and owed are material cost only.
+          </p>
+        </div>
+        <Link
+          href="/suppliers/new"
+          className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-800"
+        >
+          + Add Supplier
+        </Link>
+      </div>
 
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
@@ -138,7 +166,9 @@ export default async function SuppliersPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 text-right font-medium">Balance Owed</th>
+                <th className="px-4 py-3 text-right font-medium">Total Purchased</th>
+                <th className="px-4 py-3 text-right font-medium">Total Paid</th>
+                <th className="px-4 py-3 text-right font-medium">Balance</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -146,7 +176,7 @@ export default async function SuppliersPage({
               {pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={6}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
                     {hasFilters
@@ -155,7 +185,7 @@ export default async function SuppliersPage({
                   </td>
                 </tr>
               )}
-              {pageRows.map(({ supplier: v, balanceOwed }) => (
+              {pageRows.map(({ supplier: v, balanceOwed, totalPurchased, totalPaid }) => (
                 <tr
                   key={v.id}
                   className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
@@ -171,14 +201,14 @@ export default async function SuppliersPage({
                   <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                     {v.phone ?? "—"}
                   </td>
+                  <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
+                    {formatPKR(totalPurchased)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
+                    {formatPKR(totalPaid)}
+                  </td>
                   <td className="px-4 py-3 text-right">
-                    {balanceOwed > 0 ? (
-                      <span className="font-semibold text-amber-700 dark:text-amber-400">
-                        {formatPKR(balanceOwed)}
-                      </span>
-                    ) : (
-                      <span className="text-neutral-400">{formatPKR(balanceOwed)}</span>
-                    )}
+                    <BalanceBadge balance={balanceOwed} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -199,6 +229,25 @@ export default async function SuppliersPage({
                 </tr>
               ))}
             </tbody>
+            {filtered.length > 0 && (
+              <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
+                    {hasFilters ? "Filtered Total" : "Total"}
+                  </td>
+                  <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
+                    {formatPKR(sumPurchased)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
+                    {formatPKR(sumPaid)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-amber-700 dark:text-amber-400">
+                    {formatPKR(sumOwed)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
         <Suspense>
