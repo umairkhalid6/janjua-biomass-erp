@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDate, formatPKR, toDateInputValue } from "@/lib/format";
+import { EPSILON } from "@/lib/money";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
 import { foldInstantPayments } from "@/lib/ledger";
@@ -32,11 +33,15 @@ type SummaryRow = {
   company: string | null;
   phone: string | null;
   opening_balance: string | number;
+  opening_receivable: string | number;
+  opening_advance: string | number;
   total_sales: string | number;
+  total_billed: string | number;
   sales_count: string | number;
   total_bags: string | number;
   last_sale_date: Date | null;
   total_paid: string | number;
+  total_received_all: string | number;
   last_payment_date: Date | null;
   outstanding: string | number;
 };
@@ -102,8 +107,14 @@ export default async function CustomerDetailPage({
 
   const summary = summaryRows[0];
   const outstanding = summary ? Number(summary.outstanding) : 0;
-  const totalSales = summary ? Number(summary.total_sales) : 0;
-  const totalPaid = summary ? Number(summary.total_paid) : 0;
+  // Opening balance folds into the side it belongs to rather than sitting in a
+  // card of its own: what they already owed us is part of what's billed, an
+  // advance they had already paid is part of what's received. Billed −
+  // received = outstanding, on every customer.
+  const totalBilled = summary ? Number(summary.total_billed) : 0;
+  const totalPaid = summary ? Number(summary.total_received_all) : 0;
+  const openingReceivable = summary ? Number(summary.opening_receivable) : 0;
+  const openingAdvance = summary ? Number(summary.opening_advance) : 0;
 
   // A receipt recorded together with its invoice (linked, same date) reads as
   // one event — fold it into the sale row instead of showing two ledger lines.
@@ -195,12 +206,17 @@ export default async function CustomerDetailPage({
 
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Total Sales
+            Total Billed
           </p>
           <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-50">
-            {formatPKR(totalSales)}
+            {formatPKR(totalBilled)}
           </p>
-          <p className="mt-0.5 text-xs text-neutral-500">All time</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            All time
+            {openingReceivable > EPSILON
+              ? `, incl. ${formatPKR(openingReceivable)} owed when added`
+              : ""}
+          </p>
         </div>
 
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -210,7 +226,12 @@ export default async function CustomerDetailPage({
           <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
             {formatPKR(totalPaid)}
           </p>
-          <p className="mt-0.5 text-xs text-neutral-500">Payments collected</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Payments collected
+            {openingAdvance > EPSILON
+              ? `, incl. ${formatPKR(openingAdvance)} advance carried in`
+              : ""}
+          </p>
         </div>
       </div>
 

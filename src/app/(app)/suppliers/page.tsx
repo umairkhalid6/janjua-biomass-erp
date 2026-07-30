@@ -21,9 +21,13 @@ type SupplierSummaryRow = {
   name: string;
   phone: string | null;
   opening_balance: string | number;
+  opening_owed: string | number;
+  opening_advance: string | number;
   total_purchased: string | number;
+  total_payable: string | number;
   last_purchase_date: Date | null;
   total_paid: string | number;
+  total_paid_all: string | number;
   last_payment_date: Date | null;
   balance_owed: string | number;
 };
@@ -67,14 +71,16 @@ export default async function SuppliersPage({
   ]);
 
   // Build a lookup from summary for ledger figures (payables are material
-  // cost only; handling cost never enters supplier balances).
+  // cost only; handling cost never enters supplier balances). Payable and paid
+  // both include the opening balance on their side of it, matching the
+  // supplier detail cards — so payable − paid = balance reads on every row.
   const summaryById = new Map(
     summaryRows.map((r) => [
       r.supplier_id,
       {
         balanceOwed: Number(r.balance_owed),
-        totalPurchased: Number(r.total_purchased),
-        totalPaid: Number(r.total_paid),
+        totalPayable: Number(r.total_payable),
+        totalPaid: Number(r.total_paid_all),
       },
     ])
   );
@@ -84,7 +90,7 @@ export default async function SuppliersPage({
     return {
       supplier: v,
       balanceOwed: s?.balanceOwed ?? 0,
-      totalPurchased: s?.totalPurchased ?? 0,
+      totalPayable: s?.totalPayable ?? 0,
       totalPaid: s?.totalPaid ?? 0,
     };
   });
@@ -113,7 +119,7 @@ export default async function SuppliersPage({
   const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
   // Totals cover every filtered row, not just the visible page.
-  const sumPurchased = filtered.reduce((s, r) => s + r.totalPurchased, 0);
+  const sumPayable = filtered.reduce((s, r) => s + r.totalPayable, 0);
   const sumPaid = filtered.reduce((s, r) => s + r.totalPaid, 0);
   const sumOwed = filtered.reduce((s, r) => s + r.balanceOwed, 0);
 
@@ -126,7 +132,8 @@ export default async function SuppliersPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
             Click a supplier to see the full ledger or record a payment /
-            adjustment. Purchased and owed are material cost only.
+            adjustment. Payable and owed are material cost only; any opening
+            balance is counted as payable or as paid, whichever side it sits on.
           </p>
         </div>
         <Link
@@ -166,7 +173,7 @@ export default async function SuppliersPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 text-right font-medium">Total Purchased</th>
+                <th className="px-4 py-3 text-right font-medium">Total Payable</th>
                 <th className="px-4 py-3 text-right font-medium">Total Paid</th>
                 <th className="px-4 py-3 text-right font-medium">Balance</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
@@ -185,7 +192,7 @@ export default async function SuppliersPage({
                   </td>
                 </tr>
               )}
-              {pageRows.map(({ supplier: v, balanceOwed, totalPurchased, totalPaid }) => (
+              {pageRows.map(({ supplier: v, balanceOwed, totalPayable, totalPaid }) => (
                 <tr
                   key={v.id}
                   className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
@@ -202,7 +209,7 @@ export default async function SuppliersPage({
                     {v.phone ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
-                    {formatPKR(totalPurchased)}
+                    {formatPKR(totalPayable)}
                   </td>
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {formatPKR(totalPaid)}
@@ -236,7 +243,7 @@ export default async function SuppliersPage({
                     {hasFilters ? "Filtered Total" : "Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
-                    {formatPKR(sumPurchased)}
+                    {formatPKR(sumPayable)}
                   </td>
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {formatPKR(sumPaid)}

@@ -27,9 +27,13 @@ type SummaryRow = {
   name: string;
   phone: string | null;
   opening_balance: string | number;
+  opening_owed: string | number;
+  opening_advance: string | number;
   total_purchased: string | number;
+  total_payable: string | number;
   last_purchase_date: Date | null;
   total_paid: string | number;
+  total_paid_all: string | number;
   last_payment_date: Date | null;
   balance_owed: string | number;
 };
@@ -63,12 +67,14 @@ export default async function SupplierDetailPage({
 
   const summary = summaryRows[0];
   const balanceOwed = summary ? Number(summary.balance_owed) : 0;
-  const totalPurchased = summary ? Number(summary.total_purchased) : 0;
-  const totalPaid = summary ? Number(summary.total_paid) : 0;
-  // Shown as its own card when non-zero, otherwise the other three figures
-  // look like they don't add up: opening + purchased − paid = balance.
-  const openingBalance = summary ? Number(summary.opening_balance) : 0;
-  const hasOpening = Math.abs(openingBalance) > EPSILON;
+  // Opening balance has no card of its own: money owed before the system
+  // started is part of what's payable, money paid in advance is part of what's
+  // been paid. Folded that way the three cards always reconcile —
+  // payable − paid = balance — and an old advance stops hiding in a fourth box.
+  const totalPayable = summary ? Number(summary.total_payable) : 0;
+  const totalPaid = summary ? Number(summary.total_paid_all) : 0;
+  const openingOwed = summary ? Number(summary.opening_owed) : 0;
+  const openingAdvance = summary ? Number(summary.opening_advance) : 0;
 
   // A payment recorded together with its purchase (linked, same date) reads as
   // one event to the owner — fold it into the purchase row instead of showing
@@ -123,12 +129,8 @@ export default async function SupplierDetailPage({
         </div>
       </div>
 
-      {/* Summary cards — opening + purchased − paid = balance */}
-      <div
-        className={`grid gap-4 ${
-          hasOpening ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"
-        }`}
-      >
+      {/* Summary cards — payable − paid = balance (opening folded into both) */}
+      <div className="grid gap-4 sm:grid-cols-3">
         <div
           className={`rounded-xl border p-4 ${
             balanceOwed > EPSILON
@@ -161,37 +163,18 @@ export default async function SupplierDetailPage({
           </p>
         </div>
 
-        {hasOpening && (
-          <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Opening Balance
-            </p>
-            <p
-              className={`mt-1 text-2xl font-bold ${
-                openingBalance < 0
-                  ? "text-green-700 dark:text-green-400"
-                  : "text-amber-800 dark:text-amber-400"
-              }`}
-            >
-              {formatPKR(Math.abs(openingBalance))}
-            </p>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              {openingBalance < 0
-                ? "Advance carried in"
-                : "Already owed when added"}
-            </p>
-          </div>
-        )}
-
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Total Purchased
+            Total Payable
           </p>
           <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-50">
-            {formatPKR(totalPurchased)}
+            {formatPKR(totalPayable)}
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
-            Material cost (payable) — all time
+            Material cost — all time
+            {openingOwed > EPSILON
+              ? `, incl. ${formatPKR(openingOwed)} owed when added`
+              : ""}
           </p>
         </div>
 
@@ -203,9 +186,10 @@ export default async function SupplierDetailPage({
             {formatPKR(totalPaid)}
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
-            {hasOpening
-              ? "Payments made — excludes opening"
-              : "Payments made"}
+            Payments made
+            {openingAdvance > EPSILON
+              ? `, incl. ${formatPKR(openingAdvance)} advance carried in`
+              : ""}
           </p>
         </div>
       </div>

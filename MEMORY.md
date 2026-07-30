@@ -50,9 +50,10 @@ Update it as significant decisions are made.
   supplier ledger says "Paid at entry — <method>" (it records that money changed hands, not
   that the purchase is settled); it used to say "Part paid" and disagreed with the Purchases
   badge for the same purchase.
-- **Summary figures must reconcile on screen.** The supplier detail cards show an Opening
-  Balance card whenever it is non-zero, because Purchased − Paid alone contradicts the balance
-  when an opening advance/debt exists (opening + purchased − paid = balance).
+- **Summary figures must reconcile on screen.** Superseded 2026-07-30 by "Opening balance folds
+  into Payable / Paid" at the end of this file — the rule stands, the fourth Opening Balance card
+  is gone: opening is folded by sign into Total Payable or Total Paid, so Payable − Paid = Balance
+  with three cards and no exceptions.
 - FIFO's same-day tiebreaker is `id`, matching `v_supplier_ledger`'s `(date, sort_order,
   entry_id)` — not `createdAt`, which could allocate same-day purchases in a different order
   than the ledger displays. See migration `20260730160000_fifo_order_matches_ledger`.
@@ -545,3 +546,32 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   date kept) → unpaid (row deleted, balance back to 9,000); and with a seeded +9,000 credit and
   −2,000 debit adjustment, targeting 5,000 trimmed the credit to 7,000 and left the debit untouched.
   All test rows removed afterwards.
+
+### Opening balance folds into Payable / Paid; no card of its own (2026-07-30)
+- **Owner's complaint:** an advance paid to a supplier before the system started sat in its own
+  "Opening Balance" card while "Total Paid" excluded it — two numbers about money paid, only one
+  called paid. The arithmetic was always right (`opening + purchased − paid = balance`, OPENING row
+  in the ledger, FIFO nets opening out of the payment pool); only the cards misled.
+- **Rule:** opening balance is folded **by sign** into the side it belongs to. Supplier: DR
+  (positive, owed when added) → **Total Payable**; CR (negative, advance carried in) → **Total Paid**.
+  Customer mirrors it: DR → **Total Billed**, CR → **Total Received**. The standalone card is gone,
+  so the summary is always three cards and `payable − paid = balance` reads on every row. Each
+  folded figure carries an "incl. Rs X …" subtext so the number still ties back to the ledger row.
+- **Migration `20260730180000_summary_folds_opening_balance`** adds the folded columns to
+  `v_supplier_summary` (`opening_owed`, `opening_advance`, `total_payable`, `total_paid_all`) and
+  `v_customer_summary` (`opening_receivable`, `opening_advance`, `total_billed`,
+  `total_received_all`). Raw `total_purchased` / `total_sales` / `total_paid` / `opening_balance`
+  stay for anything needing record-true figures. Doing it in SQL (not per page) is what keeps the
+  detail pages and the list pages from drifting apart.
+- **Deliberately NOT folded:** `v_purchase_settlement` (its FIFO pool already subtracts the opening
+  balance — folding again double-counts and flips purchase badges); `/reports/suppliers` and
+  `/reports/customers` (they sum inside a date window, and an opening balance has no date, so
+  "paid in July" must stay period-true — reports/suppliers only reads all-time `balance_owed` from
+  the view); the customer statement's "Opening Balance (brought forward)", which is a date-range
+  carry-forward from the ledger, not this field.
+- **Consumers updated:** supplier detail cards, Supplier Ledger list (header now "Total Payable",
+  footer totals folded), customer detail cards ("Total Sales" → "Total Billed"). The customers list
+  shows only Outstanding, so it needed nothing.
+- **Verified live** by temporarily setting an opening balance on Ali Hassan (supplier) and AH Bakers
+  (customer), checking both signs on both sides — cards, subtexts, list rows and footer all
+  reconciled — then resetting both to 0. No account in the local DB carries an opening balance today.
