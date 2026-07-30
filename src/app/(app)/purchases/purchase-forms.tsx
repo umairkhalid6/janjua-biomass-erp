@@ -35,6 +35,18 @@ type PurchaseRow = {
   materialCost: number;
   handlingCost: number;
   notes: string | null;
+  // Payments linked to this purchase — what the edit form's Payment Status
+  // controls. The badge on the table is FIFO-derived across the supplier's
+  // whole account, so the two can legitimately disagree.
+  paidAtEntry: number;
+  paymentMethod: string;
+  settlementStatus: "paid" | "partial" | "unpaid";
+};
+
+const STATUS_LABELS: Record<PurchaseRow["settlementStatus"], string> = {
+  paid: "Paid",
+  partial: "Partial",
+  unpaid: "Unpaid",
 };
 
 // Calls the server action directly instead of rendering a nested <form>.
@@ -178,8 +190,16 @@ function PurchaseForm({
   const [handlingCost, setHandlingCost] = useState(
     existing ? String(existing.handlingCost) : ""
   );
+  // Editing starts from what is actually recorded against the purchase, not
+  // from the table badge — the badge can read "Paid" off a lump-sum payment
+  // that isn't linked here.
   const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">(
-    "PAID"
+    existing && existing.paidAtEntry + 0.005 < existing.materialCost
+      ? "UNPAID"
+      : "PAID"
+  );
+  const [amountPaid, setAmountPaid] = useState(
+    existing && existing.paidAtEntry > 0 ? String(existing.paidAtEntry) : ""
   );
   const [formKey, setFormKey] = useState(0);
 
@@ -193,6 +213,7 @@ function PurchaseForm({
     setMaterialCost("");
     setHandlingCost("");
     setPaymentStatus("PAID");
+    setAmountPaid("");
     setFormKey((k) => k + 1);
   }, [state, existing]);
 
@@ -201,6 +222,23 @@ function PurchaseForm({
   const hc = parseFloat(handlingCost || "0");
   const total = !isNaN(mc) ? mc + (isNaN(hc) ? 0 : hc) : 0;
   const ratePerKg = w > 0 && !isNaN(mc) ? total / w : null;
+
+  // FIFO pours every payment over the supplier's purchases oldest-first, so
+  // the table badge can disagree with what is linked to this row — flag both
+  // directions, since the "paid here but Unpaid there" case is just as
+  // confusing as the one where marking it paid would pay twice.
+  const RANK = { unpaid: 0, partial: 1, paid: 2 };
+  const linkedStatus = !existing
+    ? "unpaid"
+    : existing.paidAtEntry + 0.005 >= existing.materialCost
+    ? "paid"
+    : existing.paidAtEntry > 0.005
+    ? "partial"
+    : "unpaid";
+  const badgeAheadOfLinked =
+    !!existing && RANK[existing.settlementStatus] > RANK[linkedStatus];
+  const badgeBehindLinked =
+    !!existing && RANK[existing.settlementStatus] < RANK[linkedStatus];
 
   return (
     <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
@@ -332,60 +370,85 @@ function PurchaseForm({
           </p>
         )}
       </div>
-      {!existing && (
-        <>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Payment Status
-            </label>
-            <select
-              name="paymentStatus"
-              value={paymentStatus}
-              onChange={(e) =>
-                setPaymentStatus(e.target.value as "UNPAID" | "PAID")
-              }
-              className={input}
-            >
-              <option value="PAID">
-                Paid in full
-                {!isNaN(mc) && mc > 0 ? ` — ${formatRate(mc)} (material)` : ""}
-              </option>
-              <option value="UNPAID">Unpaid / partial — on balance</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Payment Method
-            </label>
-            <select name="paymentMethod" defaultValue="Cash" className={input}>
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-          {paymentStatus === "UNPAID" && (
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-                Amount paid now (PKR, optional)
-              </label>
-              <input
-                name="amountPaid"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                className={input}
-              />
-              <p className="mt-1 text-[11px] text-neutral-400">
-                Leave empty if nothing was paid — the material cost goes on the
-                supplier&apos;s balance. Enter a smaller amount for a partial
-                payment. Handling cost is never owed to the supplier.
-              </p>
-            </div>
-          )}
-        </>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Payment Status
+        </label>
+        <select
+          name="paymentStatus"
+          value={paymentStatus}
+          onChange={(e) =>
+            setPaymentStatus(e.target.value as "UNPAID" | "PAID")
+          }
+          className={input}
+        >
+          <option value="PAID">
+            Paid in full
+            {!isNaN(mc) && mc > 0 ? ` — ${formatRate(mc)} (material)` : ""}
+          </option>
+          <option value="UNPAID">Unpaid / partial — on balance</option>
+        </select>
+        {existing && (
+          <p className="mt-1 text-[11px] text-neutral-400">
+            Recorded against this purchase:{" "}
+            <span className="font-medium text-neutral-500 dark:text-neutral-300">
+              {formatRate(existing.paidAtEntry)}
+            </span>{" "}
+            of {formatRate(existing.materialCost)}. Saving adjusts that payment
+            to match.
+          </p>
+        )}
+        {existing && (badgeAheadOfLinked || badgeBehindLinked) && (
+          <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+            The table shows this purchase as{" "}
+            {STATUS_LABELS[existing.settlementStatus]}{" "}
+            because payments are applied oldest-first across the
+            supplier&apos;s whole account.{" "}
+            {badgeAheadOfLinked
+              ? "Another payment already covers it — marking it paid here records an extra payment."
+              : "An older purchase or the opening balance is absorbing this payment."}
+          </p>
+        )}
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Payment Method
+        </label>
+        <select
+          name="paymentMethod"
+          defaultValue={existing?.paymentMethod ?? "Cash"}
+          className={input}
+        >
+          {METHODS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+      {paymentStatus === "UNPAID" && (
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            {existing
+              ? "Amount paid against this purchase (PKR, optional)"
+              : "Amount paid now (PKR, optional)"}
+          </label>
+          <input
+            name="amountPaid"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            value={amountPaid}
+            onChange={(e) => setAmountPaid(e.target.value)}
+            className={input}
+          />
+          <p className="mt-1 text-[11px] text-neutral-400">
+            {existing
+              ? "Leave empty to put the whole material cost back on the supplier's balance — the payment logged with this purchase is removed. Handling cost is never owed to the supplier."
+              : "Leave empty if nothing was paid — the material cost goes on the supplier's balance. Enter a smaller amount for a partial payment. Handling cost is never owed to the supplier."}
+          </p>
+        </div>
       )}
       <div className="sm:col-span-2 flex items-center gap-3">
         <Submit label={submitLabel} />

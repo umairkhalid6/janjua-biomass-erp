@@ -73,7 +73,12 @@ export default async function PurchasesPage({
         date: { gte, lte },
         ...(material ? { materialType: material } : {}),
       },
-      include: { supplier: true },
+      include: {
+        supplier: true,
+        // Drives the edit modal's Payment Status — what was actually paid
+        // against this purchase, as opposed to the FIFO badge below.
+        payments: { orderBy: [{ date: "asc" }, { createdAt: "asc" }] },
+      },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
@@ -106,6 +111,10 @@ export default async function PurchasesPage({
     // Payable to the supplier is material cost only — handling is the owner's
     // own expense. Status comes from the FIFO settlement view.
     const paymentStatus = statusById.get(p.id) ?? "unpaid";
+    const paidAtEntry = p.payments.reduce(
+      (sum, pay) => sum + pay.amount.toNumber(),
+      0
+    );
     return {
       id: p.id,
       date: toDateInputValue(p.date),
@@ -119,6 +128,8 @@ export default async function PurchasesPage({
       ratePerKg,
       notes: p.notes,
       paymentStatus,
+      paidAtEntry,
+      paymentMethod: p.payments[p.payments.length - 1]?.method ?? "Cash",
     };
   });
 
@@ -301,6 +312,9 @@ export default async function PurchasesPage({
                             materialCost: row.materialCost,
                             handlingCost: row.handlingCost,
                             notes: row.notes,
+                            paidAtEntry: row.paidAtEntry,
+                            paymentMethod: row.paymentMethod,
+                            settlementStatus: row.paymentStatus,
                           }}
                           suppliers={supplierOptions}
                         />

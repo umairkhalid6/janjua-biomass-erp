@@ -515,21 +515,33 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 - **Why it wasn't there:** payment status is *derived* (sum of `SupplierPayment` rows linked to the
   purchase vs `materialCost`), not a stored column, so the edit form previously hid the payment
   block entirely — only `createPurchase` could record a payment.
-- **UI:** the edit modal now has **Payment Status** (Paid in full / Partial / Unpaid) + **Payment
-  Method**, defaulting to the purchase's derived current status. Choosing Partial reveals "Total
-  paid on this purchase" — a *running total*, not an increment (the create form's `amountPaid`
-  means "paid now"; same field name, different semantics per action, documented in both).
+- **Landed 2026-07-30 (second pass).** The first pass documented below never shipped — commit
+  `f3926d0` only reordered the `"PAID" | "UNPAID"` union in `purchase-forms.tsx`; the edit form
+  still hid the whole payment block behind `{!existing && …}`. Re-implemented from scratch.
+- **UI:** the payment block is now shared by the create and edit forms — **Payment Status**
+  (Paid in full / Unpaid–partial, matching the create form's two options) + **Payment Method**,
+  with the amount field appearing under Unpaid. Defaults come from what is *linked to the
+  purchase*, never from the table badge, and the amount is a *running total*, not an increment
+  (the create form's `amountPaid` means "paid now"; same field name, different semantics per
+  action). Method defaults to the last linked payment's method.
+- **FIFO vs linked payments:** the table badge is `v_purchase_settlement` (payments poured over
+  the supplier's purchases oldest-first), so it can legitimately disagree with this purchase's
+  own payments. The modal shows "Recorded against this purchase: Rs X of Rs Y" plus an amber
+  note in **both** mismatch directions — badge ahead of linked ("another payment already covers
+  it — marking it paid records an extra payment") and badge behind linked ("an older purchase or
+  the opening balance is absorbing this payment").
 - **Reconciliation in `updatePurchase`:** the status names a target total. `diff = target - currentPaid`;
   `diff > 0` creates one settlement payment (chosen method, purchase date), `diff < 0` trims the
   purchase's linked payments **newest-first**, deleting rows fully consumed and reducing the last one
   partially. Negative rows (debit adjustments) are skipped by the trim — deleting one would *raise*
   the paid total. An absent `paymentStatus` field leaves payments untouched. Target is still capped
   at `materialCost` (handling cost is never payable). All money rounded via `round2` before compare/write.
-- **Also fixed here (required by the above):** editing a purchase's supplier now moves its linked
-  payments to the new supplier (`updateMany`) — otherwise the old supplier kept the credit while the
-  purchase moved, and a subsequent "Paid in full" would double-count. `updatePurchase` now revalidates
-  `/suppliers`, both supplier detail pages and `/reports/suppliers`, not just `/purchases`.
-- **Verified** with a throwaway rollback-only harness against the real schema: 13 scenarios
-  (unpaid/partial/paid → each target, multi-row newest-first trim, debit-adjustment rows, supplier
-  reassignment, fractional amounts) all passed, DB left untouched. Modal not visually checked — it is
-  behind admin auth.
+- **Supplier reassignment** already moved linked payments (`updateMany`) and that stayed — the
+  reconcile runs after it, so a "Paid in full" after a supplier change credits the new supplier.
+- **Verified live** on the local Docker DB (dev server on new launch config `erp-dev-localauth-3017`;
+  `npm run dev` hardcodes `AUTH_URL=…3011`, so the config runs `npx next dev` directly): defaults and
+  both mismatch notes render for paid/partial/unpaid rows; a 9,000 purchase round-tripped
+  unpaid → paid (payment row created, badge Paid) → partial 4,000 (row reduced in place, method and
+  date kept) → unpaid (row deleted, balance back to 9,000); and with a seeded +9,000 credit and
+  −2,000 debit adjustment, targeting 5,000 trimmed the credit to 7,000 and left the debit untouched.
+  All test rows removed afterwards.
