@@ -3,18 +3,19 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
+  DATA_START_MONTH,
   PERIOD_OPTIONS,
   currentMonthParam,
   formatMonth,
   isMonthPeriod,
-  recentMonthPeriods,
+  monthPeriodOptions,
 } from "@/lib/format";
 
 interface PeriodPickerProps {
   value: string; // a trailing window ("3m") or a single month ("2026-07")
   paramName?: string;
-  /** How many past months to offer individually. */
-  monthCount?: number;
+  /** Earliest month to offer, as "YYYY-MM". Defaults to the first month with data. */
+  startMonth?: string;
 }
 
 type MonthOption = { value: string; label: string };
@@ -27,11 +28,11 @@ type MonthOption = { value: string; label: string };
 const NO_MONTHS: MonthOption[] = [];
 const monthCache = new Map<string, MonthOption[]>();
 
-function monthSnapshot(count: number): MonthOption[] {
-  const key = `${count}:${currentMonthParam()}`;
+function monthSnapshot(startMonth: string): MonthOption[] {
+  const key = `${startMonth}:${currentMonthParam()}`;
   let list = monthCache.get(key);
   if (!list) {
-    list = recentMonthPeriods(count);
+    list = monthPeriodOptions(startMonth);
     monthCache.clear();
     monthCache.set(key, list);
   }
@@ -46,24 +47,28 @@ const subscribeNever = () => () => {};
  * calendar month (1st to last day). Mirrors MonthPicker's URL-push behaviour so
  * the page re-renders server-side with the new range.
  */
-export function PeriodPicker({ value, paramName = "period", monthCount = 24 }: PeriodPickerProps) {
+export function PeriodPicker({
+  value,
+  paramName = "period",
+  startMonth = DATA_START_MONTH,
+}: PeriodPickerProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const recentMonths = useSyncExternalStore(
+  const listedMonths = useSyncExternalStore(
     subscribeNever,
-    () => monthSnapshot(monthCount),
+    () => monthSnapshot(startMonth),
     () => NO_MONTHS
   );
 
   // Always offer the selected month, even before the client list arrives or
-  // when it predates the window (e.g. a bookmarked URL). Its label comes from
-  // the value itself, so it renders identically on server and client.
+  // when it falls outside the range (e.g. a bookmarked URL). Its label comes
+  // from the value itself, so it renders identically on server and client.
   const months = useMemo(() => {
-    if (!isMonthPeriod(value) || recentMonths.some((o) => o.value === value)) return recentMonths;
-    return [...recentMonths, { value, label: formatMonth(value) }];
-  }, [recentMonths, value]);
+    if (!isMonthPeriod(value) || listedMonths.some((o) => o.value === value)) return listedMonths;
+    return [...listedMonths, { value, label: formatMonth(value) }];
+  }, [listedMonths, value]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {

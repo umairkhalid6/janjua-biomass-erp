@@ -150,16 +150,26 @@ export function periodRange(period: PeriodValue): { gte: Date; lte: Date } {
 }
 
 /**
- * The last `count` calendar months ending at `now` (most recent first), as
- * period options: `{ value: "2026-07", label: "July 2026" }`.
+ * First month with data in this system — nothing was recorded before July 2026,
+ * so the month filter starts here rather than offering empty earlier months.
  */
-export function recentMonthPeriods(
-  count = 24,
+export const DATA_START_MONTH = "2026-07";
+
+/**
+ * Selectable calendar months, from `startMonth` up to the month containing
+ * `now`, most recent first: `{ value: "2026-07", label: "July 2026" }`.
+ * Empty if `now` predates `startMonth`.
+ */
+export function monthPeriodOptions(
+  startMonth: string = DATA_START_MONTH,
   now: Date = new Date()
 ): { value: string; label: string }[] {
+  const start = parseMonthParam(startMonth);
   const y = now.getFullYear();
   const m = now.getMonth();
-  return Array.from({ length: count }, (_, i) => {
+  const count =
+    (y - start.getUTCFullYear()) * 12 + (m - start.getUTCMonth()) + 1;
+  return Array.from({ length: Math.max(count, 0) }, (_, i) => {
     const d = new Date(Date.UTC(y, m - i, 1));
     const value = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     return { value, label: formatMonth(value) };
