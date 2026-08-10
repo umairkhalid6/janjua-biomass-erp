@@ -5,6 +5,7 @@ import {
   formatPKR,
   parsePeriodParam,
   periodLabel,
+  periodLabelLower,
   periodRange,
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
@@ -139,7 +140,7 @@ export default async function MaterialsReportPage({
         </div>
       ) : (
         <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900">
-          No material purchases in {periodLabel(period).toLowerCase()}.
+          No material purchases in {periodLabelLower(period)}.
         </div>
       )}
 

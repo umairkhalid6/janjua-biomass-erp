@@ -6,6 +6,7 @@ import {
   formatPKR,
   parsePeriodParam,
   periodLabel,
+  periodLabelLower,
   periodRange,
 } from "@/lib/format";
 import {
@@ -134,7 +135,7 @@ export default async function ContractorReportPage({
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="px-4 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Ledger — {periodLabel(period).toLowerCase()}
+            Ledger — {periodLabelLower(period)}
           </h2>
         </div>
         <div className="overflow-x-auto">

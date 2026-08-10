@@ -6,6 +6,7 @@ import {
   formatPKR,
   parsePeriodParam,
   periodLabel,
+  periodLabelLower,
   periodRange,
   toDateInputValue,
 } from "@/lib/format";
@@ -163,7 +164,7 @@ export default async function HandlingReportPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
             Unloading / gari expenses (your own cost, not payable to suppliers)
-            — {periodLabel(period).toLowerCase()}
+            — {periodLabelLower(period)}
           </p>
         </div>
         <Suspense>
@@ -230,7 +231,7 @@ export default async function HandlingReportPage({
                     colSpan={4}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No handling costs in {periodLabel(period).toLowerCase()}.
+                    No handling costs in {periodLabelLower(period)}.
                   </td>
                 </tr>
               )}
@@ -299,7 +300,7 @@ export default async function HandlingReportPage({
                     colSpan={3}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No handling costs in {periodLabel(period).toLowerCase()}.
+                    No handling costs in {periodLabelLower(period)}.
                   </td>
                 </tr>
               )}
@@ -410,7 +411,7 @@ export default async function HandlingReportPage({
                     colSpan={6}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No handling costs in {periodLabel(period).toLowerCase()}.
+                    No handling costs in {periodLabelLower(period)}.
                   </td>
                 </tr>
               )}

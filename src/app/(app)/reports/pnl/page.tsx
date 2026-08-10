@@ -5,6 +5,7 @@ import {
   formatPKR,
   parsePeriodParam,
   periodLabel,
+  periodLabelLower,
   periodRange,
 } from "@/lib/format";
 import {
@@ -178,7 +179,7 @@ export default async function PnlPage({
         </table>
         {!hasData && (
           <p className="px-4 py-6 text-center text-sm text-neutral-400">
-            No data for {periodLabel(period).toLowerCase()}.
+            No data for {periodLabelLower(period)}.
           </p>
         )}
       </section>

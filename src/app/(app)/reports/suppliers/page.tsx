@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import {
   formatPKR,
   parsePeriodParam,
-  periodLabel,
+  periodLabelLower,
   periodRange,
 } from "@/lib/format";
 import { PeriodPicker } from "@/components/period-picker";
@@ -75,7 +75,7 @@ export default async function SuppliersReportPage({
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Suppliers</h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            Material purchases (payable) &amp; payments — {periodLabel(period).toLowerCase()}. Balance owed is all-time; handling costs are in the Handling Costs report.
+            Material purchases (payable) &amp; payments — {periodLabelLower(period)}. Balance owed is all-time; handling costs are in the Handling Costs report.
           </p>
         </div>
         <Suspense>

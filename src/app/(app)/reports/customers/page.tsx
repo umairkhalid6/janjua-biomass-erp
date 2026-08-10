@@ -5,7 +5,7 @@ import {
   formatDate,
   formatPKR,
   parsePeriodParam,
-  periodLabel,
+  periodLabelLower,
   periodRange,
 } from "@/lib/format";
 import { PeriodPicker } from "@/components/period-picker";
@@ -72,7 +72,7 @@ export default async function CustomersReportPage({
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Customers</h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            Sales per customer — {periodLabel(period).toLowerCase()}.
+            Sales per customer — {periodLabelLower(period)}.
           </p>
         </div>
         <Suspense>
