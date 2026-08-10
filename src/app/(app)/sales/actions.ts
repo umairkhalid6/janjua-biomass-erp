@@ -166,19 +166,25 @@ export async function updateSale(
 }
 
 export async function deleteSale(formData: FormData): Promise<void> {
-  await requireAdmin();
+  // Admins may delete any sale; operators only the ones they created.
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   // Linked payments survive (saleId is SET NULL on delete) — the money was
   // still received; only the invoice reference goes away.
   const sale = await prisma.pelletSale.findUnique({
     where: { id },
-    select: { customerId: true },
+    select: { customerId: true, createdById: true },
   });
+  if (!sale) return;
+  // Ownership guard. This is a plain form action with no error channel, so an
+  // unauthorized attempt (only reachable by tampering — the button is hidden)
+  // just no-ops.
+  if (user.role !== "ADMIN" && sale.createdById !== user.id) return;
   await prisma.pelletSale.delete({ where: { id } });
   revalidatePath("/sales");
   revalidatePath("/customers");
-  if (sale) revalidatePath(`/customers/${sale.customerId}`);
+  revalidatePath(`/customers/${sale.customerId}`);
   revalidatePath("/reports/customers");
 }
 

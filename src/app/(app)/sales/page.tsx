@@ -52,24 +52,26 @@ export default async function SalesPage({
   const customerId = sp.customer ?? null;
   // Invoice search matches on digits, so "INV-00123", "00123" and "123" all work.
   const invoiceQuery = sp.invoice?.replace(/\D/g, "") ?? "";
+  // Money-based filters (status / amount range) are admin-only: an operator
+  // cannot see the amounts on other users' rows, and filtering by them would
+  // leak those figures back a range at a time.
   const status =
-    sp.status === "paid" || sp.status === "partial" || sp.status === "unpaid"
+    isAdmin &&
+    (sp.status === "paid" || sp.status === "partial" || sp.status === "unpaid")
       ? sp.status
       : null;
-  const minAmount = parseNumberParam(sp.min);
-  const maxAmount = parseNumberParam(sp.max);
+  const minAmount = isAdmin ? parseNumberParam(sp.min) : null;
+  const maxAmount = isAdmin ? parseNumberParam(sp.max) : null;
   const hasFilters = Boolean(
     customerId || invoiceQuery || status || minAmount !== null || maxAmount !== null
   );
 
-  // Admins see every sale for the month. Operators see only the sales they
-  // entered themselves (scoped by createdById) — never records added by others.
+  // Everyone sees the full month's sales. What differs is the detail: an
+  // operator gets the money columns only on rows they entered themselves —
+  // other users' rows show just invoice #, date, customer and bags.
   const [sales, customers] = await Promise.all([
     prisma.pelletSale.findMany({
-      where: {
-        date: { gte, lte },
-        ...(isAdmin ? {} : { createdById: session.id }),
-      },
+      where: { date: { gte, lte } },
       include: { customer: true, payments: { select: { amount: true } } },
       orderBy: [{ date: "desc" }, { invoiceNo: "desc" }],
     }),
@@ -84,6 +86,11 @@ export default async function SalesPage({
     const received = s.payments.reduce((sum, p) => sum + p.amount.toNumber(), 0);
     return {
       id: s.id,
+      // Drives both the money columns and the edit/delete buttons for
+      // operators. Admins bypass it entirely. createdById is nullable (older
+      // rows predate it), so require a non-null match — otherwise a null id on
+      // either side would read as ownership and unmask the row.
+      mine: s.createdById != null && s.createdById === session.id,
       invoiceNo: s.invoiceNo,
       date: toDateInputValue(s.date),
       customerId: s.customerId,
@@ -121,10 +128,14 @@ export default async function SalesPage({
     company: c.company,
   }));
 
-  // Totals cover every filtered row, not just the visible page.
+  // Totals cover every filtered row, not just the visible page. Bags are
+  // visible to everyone, so that total spans the whole month; the money totals
+  // are summed over an operator's own rows only, or the sums would give away
+  // the very figures the row masking hides.
+  const moneyRows = isAdmin ? filtered : filtered.filter((r) => r.mine);
   const totalBags = filtered.reduce((s, r) => s + r.quantityBags, 0);
-  const totalLoading = filtered.reduce((s, r) => s + r.loadingAmount, 0);
-  const totalAmount = filtered.reduce((s, r) => s + r.amount, 0);
+  const totalLoading = moneyRows.reduce((s, r) => s + r.loadingAmount, 0);
+  const totalAmount = moneyRows.reduce((s, r) => s + r.amount, 0);
 
   const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
@@ -137,7 +148,7 @@ export default async function SalesPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
             {formatMonth(month)}
-            {!isAdmin && " · your entries"}
+            {!isAdmin && " · amounts shown on your own entries"}
           </p>
         </div>
         <Suspense>
@@ -164,27 +175,35 @@ export default async function SalesPage({
               }))}
               allLabel="All customers"
             />
-            <FilterSelect
-              paramName="status"
-              value={status ?? ""}
-              options={STATUS_OPTIONS}
-              allLabel="All payment statuses"
-            />
+            {isAdmin && (
+              <FilterSelect
+                paramName="status"
+                value={status ?? ""}
+                options={STATUS_OPTIONS}
+                allLabel="All payment statuses"
+              />
+            )}
             <FilterSearch
               paramName="invoice"
               value={sp.invoice ?? ""}
               placeholder="Invoice #"
             />
-            <FilterRange
-              minParam="min"
-              maxParam="max"
-              minValue={sp.min}
-              maxValue={sp.max}
-              placeholder={["Min amount", "Max amount"]}
-            />
+            {isAdmin && (
+              <FilterRange
+                minParam="min"
+                maxParam="max"
+                minValue={sp.min}
+                maxValue={sp.max}
+                placeholder={["Min amount", "Max amount"]}
+              />
+            )}
             {hasFilters && (
               <ResetFilters
-                params={["customer", "status", "invoice", "min", "max"]}
+                params={
+                  isAdmin
+                    ? ["customer", "status", "invoice", "min", "max"]
+                    : ["customer", "invoice"]
+                }
               />
             )}
           </Suspense>
@@ -222,12 +241,18 @@ export default async function SalesPage({
                   className="align-top hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
                 >
                   <td className="px-4 py-3 font-mono text-neutral-600 dark:text-neutral-400">
-                    <Link
-                      href={`/sales/${row.id}/invoice`}
-                      className="text-green-700 underline dark:text-green-400"
-                    >
-                      INV-{String(row.invoiceNo).padStart(5, "0")}
-                    </Link>
+                    {/* The invoice screen is admin-only, so operators get the
+                        number as plain text rather than a link that redirects. */}
+                    {isAdmin ? (
+                      <Link
+                        href={`/sales/${row.id}/invoice`}
+                        className="text-green-700 underline dark:text-green-400"
+                      >
+                        INV-{String(row.invoiceNo).padStart(5, "0")}
+                      </Link>
+                    ) : (
+                      <>INV-{String(row.invoiceNo).padStart(5, "0")}</>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
                     {formatDate(row.date)}
@@ -243,37 +268,53 @@ export default async function SalesPage({
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {row.quantityBags.toFixed(2)}
                   </td>
-                  <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
-                    {formatPKR(row.ratePerBag)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-neutral-500 dark:text-neutral-400">
-                    {formatPKR(row.loadingAmount)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-neutral-900 dark:text-neutral-50">
-                    {formatPKR(row.amount)}
-                  </td>
+                  {/* Money columns: admins always, operators only on their own
+                      entries. Others' rows stay at invoice / date / customer /
+                      bags. */}
+                  {isAdmin || row.mine ? (
+                    <>
+                      <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
+                        {formatPKR(row.ratePerBag)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-500 dark:text-neutral-400">
+                        {formatPKR(row.loadingAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-neutral-900 dark:text-neutral-50">
+                        {formatPKR(row.amount)}
+                      </td>
+                    </>
+                  ) : (
+                    <td
+                      colSpan={3}
+                      className="px-4 py-3 text-right text-xs text-neutral-400"
+                    >
+                      —
+                    </td>
+                  )}
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <EditDialog title="Edit Sale">
-                        <EditSaleForm
-                          existing={{
-                            id: row.id,
-                            date: row.date,
-                            customerId: row.customerId,
-                            quantityBags: row.quantityBags,
-                            ratePerBag: row.grossRatePerBag,
-                            notes: row.notes,
-                          }}
-                          customers={customerOptions}
-                        />
-                      </EditDialog>
-                      {isAdmin && (
+                    {/* Edit and delete follow ownership for operators; both
+                        server actions re-check it. */}
+                    {isAdmin || row.mine ? (
+                      <div className="flex gap-2">
+                        <EditDialog title="Edit Sale">
+                          <EditSaleForm
+                            existing={{
+                              id: row.id,
+                              date: row.date,
+                              customerId: row.customerId,
+                              quantityBags: row.quantityBags,
+                              ratePerBag: row.grossRatePerBag,
+                              notes: row.notes,
+                            }}
+                            customers={customerOptions}
+                          />
+                        </EditDialog>
                         <form action={deleteSale}>
                           <input type="hidden" name="id" value={row.id} />
                           <DeleteButton confirmMessage="Delete this sale?" />
                         </form>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -289,10 +330,15 @@ export default async function SalesPage({
                   </td>
                   <td />
                   <td className="px-4 py-3 text-right text-neutral-600 dark:text-neutral-400">
-                    {formatPKR(totalLoading)}
+                    {isAdmin ? formatPKR(totalLoading) : null}
                   </td>
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {formatPKR(totalAmount)}
+                    {!isAdmin && (
+                      <span className="block text-xs font-normal text-neutral-400">
+                        your entries
+                      </span>
+                    )}
                   </td>
                   <td />
                 </tr>
