@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   formatDate,
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabel,
   periodLabelLower,
@@ -31,12 +33,15 @@ type BucketRow = { bucket: Date; earned: string | number; paid: string | number 
 export default async function ContractorReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; grain?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : periodLabel(period);
+  const rangeLabelLower = customRange ? rangeLabel : periodLabelLower(period);
   const grain = parseGrainParam(sp.grain);
   const chartBuckets = defaultGrainBuckets(grain);
   const chartStart = grainWindowStart(grain, chartBuckets);
@@ -96,7 +101,7 @@ export default async function ContractorReportPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
             Contractor Ledger (Thekadar)
           </h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{rangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ScopedGrainPicker />
@@ -135,7 +140,7 @@ export default async function ContractorReportPage({
       <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="px-4 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Ledger — {periodLabelLower(period)}
+            Ledger — {rangeLabelLower}
           </h2>
         </div>
         <div className="overflow-x-auto">

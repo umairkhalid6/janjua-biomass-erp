@@ -4,7 +4,9 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-helpers";
 import {
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabel,
   periodRange,
@@ -37,7 +39,7 @@ type LedgerBalanceRow = { balance: string | number };
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; grain?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string; from?: string; to?: string }>;
 }) {
   const user = await requireUser();
   // Dashboard is ADMIN-only. Operators are bounced to /production (middleware
@@ -45,7 +47,9 @@ export default async function DashboardPage({
   if (user.role !== "ADMIN") redirect("/production");
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : periodLabel(period);
   const grain = parseGrainParam(sp.grain);
   // Keep the monthly trend at its original 6-month window; day/week grains
   // use the standard trailing windows (30 days / 12 weeks).
@@ -65,8 +69,8 @@ export default async function DashboardPage({
         COALESCE(SUM(electricity_cost), 0)            AS electricity_cost,
         COALESCE(SUM(total_cost), 0)                  AS total_cost,
         COALESCE(SUM(profit), 0)                      AS profit
-      FROM v_monthly_summary
-      WHERE month >= ${gte}::date AND month <= ${lte}::date
+      FROM v_daily_summary
+      WHERE day >= ${gte}::date AND day <= ${lte}::date
     `,
     prisma.$queryRaw<LedgerBalanceRow[]>`
       SELECT balance FROM v_contractor_ledger
@@ -108,7 +112,7 @@ export default async function DashboardPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
             Dashboard
           </h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{rangeLabel}</p>
         </div>
         <Suspense>
           <PeriodPicker value={period} />
@@ -117,7 +121,8 @@ export default async function DashboardPage({
 
       {/* Headline cards — totals for the selected period */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatCard label="Sales" value={formatPKR(sales)} sub={`${bagsSold.toLocaleString()} bags sold`} tone="blue" />
+        <StatCard label="Sales" value={formatPKR(sales)} sub="revenue" tone="blue" />
+        <StatCard label="Bags Sold" value={bagsSold.toLocaleString()} sub="total bags" tone="blue" />
         <StatCard label="Purchases" value={formatPKR(purchases)} sub="sawdust + chips" tone="amber" />
         <StatCard label="Contractor" value={formatPKR(laborCost)} sub="labor cost" tone="amber" />
         <StatCard label="Expenses" value={formatPKR(expenses)} sub="operating" tone="amber" />

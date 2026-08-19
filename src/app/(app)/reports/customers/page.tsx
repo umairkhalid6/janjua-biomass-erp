@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   formatDate,
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabelLower,
   periodRange,
@@ -24,12 +26,14 @@ type CustomerRow = {
 export default async function CustomersReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabelLower = customRange ? formatDateRangeLabel(gte, lte) : periodLabelLower(period);
 
   // Per-customer sales within the window (gross = net + loading, matching
   // v_customer_summary). INNER JOIN so only customers active in the window show.
@@ -72,7 +76,7 @@ export default async function CustomersReportPage({
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Customers</h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            Sales per customer — {periodLabelLower(period)}.
+            Sales per customer — {rangeLabelLower}.
           </p>
         </div>
         <Suspense>

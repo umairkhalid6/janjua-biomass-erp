@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   formatDate,
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabel,
   periodLabelLower,
@@ -47,12 +49,15 @@ type RecentRow = {
 export default async function HandlingReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : periodLabel(period);
+  const rangeLabelLower = customRange ? rangeLabel : periodLabelLower(period);
 
   const [totalsRows, byMaterial, bySupplier, byMonth, recent] =
     await Promise.all([
@@ -164,7 +169,7 @@ export default async function HandlingReportPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
             Unloading / gari expenses (your own cost, not payable to suppliers)
-            — {periodLabelLower(period)}
+            — {rangeLabelLower}
           </p>
         </div>
         <Suspense>
@@ -182,7 +187,7 @@ export default async function HandlingReportPage({
             {formatPKR(totalHandling)}
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
-            {periodLabel(period)}
+            {rangeLabel}
           </p>
         </div>
         <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -231,7 +236,7 @@ export default async function HandlingReportPage({
                     colSpan={4}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No handling costs in {periodLabelLower(period)}.
+                    No handling costs in {rangeLabelLower}.
                   </td>
                 </tr>
               )}
@@ -300,7 +305,7 @@ export default async function HandlingReportPage({
                     colSpan={3}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No handling costs in {periodLabelLower(period)}.
+                    No handling costs in {rangeLabelLower}.
                   </td>
                 </tr>
               )}
@@ -411,7 +416,7 @@ export default async function HandlingReportPage({
                     colSpan={6}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
-                    No handling costs in {periodLabelLower(period)}.
+                    No handling costs in {rangeLabelLower}.
                   </td>
                 </tr>
               )}

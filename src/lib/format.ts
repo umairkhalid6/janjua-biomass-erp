@@ -149,6 +149,45 @@ export function periodRange(period: PeriodValue): { gte: Date; lte: Date } {
   return { gte, lte };
 }
 
+// --- Custom date-range filtering (owner-selected explicit start/end dates) ---
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Parse a `from`/`to` query param pair (each "YYYY-MM-DD", from a date input)
+ * into a UTC date range. Returns null when either is missing, malformed, or
+ * `from` is after `to` — callers fall back to the period/month filter in that
+ * case, so a custom range is always additive, never a required param.
+ */
+export function parseCustomRangeParams(
+  from: string | undefined,
+  to: string | undefined
+): { gte: Date; lte: Date } | null {
+  if (!from || !to || !DATE_ONLY_RE.test(from) || !DATE_ONLY_RE.test(to)) return null;
+  const gte = parseDateInput(from);
+  const lte = parseDateInput(to);
+  if (gte > lte) return null;
+  return { gte, lte };
+}
+
+/** Human label for a custom date range, e.g. "18 Jun – 17 Aug 2026". */
+export function formatDateRangeLabel(gte: Date, lte: Date): string {
+  const sameYear = gte.getUTCFullYear() === lte.getUTCFullYear();
+  const from = gte.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+    timeZone: "UTC",
+  });
+  const to = lte.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return `${from} – ${to}`;
+}
+
 /**
  * First month with data in this system — nothing was recorded before July 2026,
  * so the month filter starts here rather than offering empty earlier months.

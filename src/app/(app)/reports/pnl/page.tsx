@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabel,
   periodLabelLower,
@@ -38,12 +40,15 @@ type PnlTotalsRow = {
 export default async function PnlPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; grain?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : periodLabel(period);
+  const rangeLabelLower = customRange ? rangeLabel : periodLabelLower(period);
   const grain = parseGrainParam(sp.grain);
   const historyBuckets = defaultGrainBuckets(grain);
   const historyStart = grainWindowStart(grain, historyBuckets);
@@ -65,8 +70,8 @@ export default async function PnlPage({
         COALESCE(SUM(electricity_cost), 0)  AS electricity_cost,
         COALESCE(SUM(total_cost), 0)        AS total_cost,
         COALESCE(SUM(profit), 0)            AS profit
-      FROM v_monthly_summary
-      WHERE month >= ${gte}::date AND month <= ${lte}::date
+      FROM v_daily_summary
+      WHERE day >= ${gte}::date AND day <= ${lte}::date
     `,
     prisma.$queryRaw<{ bucket: Date; profit: string | number }[]>`
       SELECT date_trunc(${grainUnit(grain)}::text, day)::date AS bucket,
@@ -107,7 +112,7 @@ export default async function PnlPage({
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
             Profit &amp; Loss
           </h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{rangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ScopedGrainPicker />
@@ -179,7 +184,7 @@ export default async function PnlPage({
         </table>
         {!hasData && (
           <p className="px-4 py-6 text-center text-sm text-neutral-400">
-            No data for {periodLabelLower(period)}.
+            No data for {rangeLabelLower}.
           </p>
         )}
       </section>

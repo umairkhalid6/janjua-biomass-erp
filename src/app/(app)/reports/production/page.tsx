@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   formatDate,
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabel,
   periodRange,
@@ -31,12 +33,14 @@ type TrendRow = { bucket: Date; total_bags: string | number };
 export default async function ProductionReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; grain?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : periodLabel(period);
   const grain = parseGrainParam(sp.grain);
   const trendBuckets = defaultGrainBuckets(grain);
   const trendStart = grainWindowStart(grain, trendBuckets);
@@ -91,7 +95,8 @@ export default async function ProductionReportPage({
   // per-day bars; "weekly"/"monthly" sum the day rows into wider buckets. The
   // bucketing happens client-side in ProductionOutputSection so flipping the
   // grain needs no refetch — the period's day rows are already on the client.
-  const multiMonth = period !== "1m";
+  const spanDays = Math.round((lte.getTime() - gte.getTime()) / 86_400_000) + 1;
+  const multiMonth = customRange ? spanDays > 31 : period !== "1m";
   const outputRows = rows.map((r) => ({
     date: r.date.toISOString(),
     day: r.dayBags,
@@ -109,7 +114,7 @@ export default async function ProductionReportPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Production</h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{rangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ScopedGrainPicker />

@@ -187,8 +187,14 @@ export default async function OverviewPage() {
           tone={totals.profit >= 0 ? "green" : "red"}
         />
         <Kpi
-          label="Produced / sold"
-          value={`${totals.produced.toLocaleString()} / ${totals.bagsSold.toLocaleString()}`}
+          label="Bags Sold"
+          value={totals.bagsSold.toLocaleString()}
+          sub="bags (40 kg)"
+          tone="blue"
+        />
+        <Kpi
+          label="Bags Produced"
+          value={totals.produced.toLocaleString()}
           sub="bags (40 kg)"
           tone="slate"
         />

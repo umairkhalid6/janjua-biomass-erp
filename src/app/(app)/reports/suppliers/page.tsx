@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabelLower,
   periodRange,
@@ -20,12 +22,14 @@ type SupplierRow = {
 export default async function SuppliersReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabelLower = customRange ? formatDateRangeLabel(gte, lte) : periodLabelLower(period);
 
   // Purchased/paid are windowed to the period; balance_owed stays all-time
   // (a running balance has no meaning scoped to a window). Only suppliers with
@@ -75,7 +79,7 @@ export default async function SuppliersReportPage({
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Suppliers</h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            Material purchases (payable) &amp; payments — {periodLabelLower(period)}. Balance owed is all-time; handling costs are in the Handling Costs report.
+            Material purchases (payable) &amp; payments — {rangeLabelLower}. Balance owed is all-time; handling costs are in the Handling Costs report.
           </p>
         </div>
         <Suspense>

@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
+  formatDateRangeLabel,
   formatPKR,
+  parseCustomRangeParams,
   parsePeriodParam,
   periodLabel,
   periodLabelLower,
@@ -34,30 +36,35 @@ type TrendRow = {
 export default async function MaterialsReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; grain?: string }>;
+  searchParams: Promise<{ period?: string; grain?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriodParam(sp.period);
-  const { gte, lte } = periodRange(period);
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? periodRange(period);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : periodLabel(period);
+  const rangeLabelLower = customRange ? rangeLabel : periodLabelLower(period);
   const grain = parseGrainParam(sp.grain);
   // Monthly keeps the original 6-month window; day/week use 30 days / 12 weeks.
   const trendBuckets = grain === "monthly" ? 6 : defaultGrainBuckets(grain);
   const trendStart = grainWindowStart(grain, trendBuckets);
 
   const [current, trendRows] = await Promise.all([
-    // Per-material totals summed across the selected window.
+    // Per-material totals summed across the selected window (mirrors
+    // v_material_totals, but queried directly so a custom range can land
+    // mid-month rather than only on whole-month boundaries).
     prisma.$queryRaw<MaterialRow[]>`
       SELECT
-        material_type,
-        SUM(weight_kg)   AS weight_kg,
-        SUM(total_cost)  AS total_cost,
-        CASE WHEN SUM(weight_kg) > 0
-             THEN ROUND(SUM(total_cost) / SUM(weight_kg), 2)
-             ELSE 0 END  AS avg_rate_per_kg
-      FROM v_material_totals
-      WHERE month >= ${gte}::date AND month <= ${lte}::date
-      GROUP BY material_type
+        "materialType" AS material_type,
+        SUM("weightKg")                      AS weight_kg,
+        SUM("materialCost" + "handlingCost") AS total_cost,
+        CASE WHEN SUM("weightKg") > 0
+             THEN ROUND(SUM("materialCost" + "handlingCost") / SUM("weightKg"), 2)
+             ELSE 0 END                      AS avg_rate_per_kg
+      FROM material_purchases
+      WHERE date >= ${gte}::date AND date <= ${lte}::date
+      GROUP BY "materialType"
     `,
     // Trend chart covers a trailing window at the selected grain, independent
     // of the period window above.
@@ -99,7 +106,7 @@ export default async function MaterialsReportPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">Materials</h1>
-          <p className="mt-0.5 text-sm text-neutral-500">{periodLabel(period)}</p>
+          <p className="mt-0.5 text-sm text-neutral-500">{rangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ScopedGrainPicker />
@@ -140,7 +147,7 @@ export default async function MaterialsReportPage({
         </div>
       ) : (
         <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900">
-          No material purchases in {periodLabelLower(period)}.
+          No material purchases in {rangeLabelLower}.
         </div>
       )}
 
