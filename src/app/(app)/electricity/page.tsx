@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { currentMonthParam, formatMonth, formatPKR } from "@/lib/format";
+import {
+  currentMonthParam,
+  formatDateRangeLabel,
+  formatMonth,
+  formatPKR,
+} from "@/lib/format";
+import { BAG_KG } from "@/lib/constants";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
 import { UpsertElectricityForm } from "./electricity-forms";
@@ -12,6 +18,20 @@ function billToMonthStr(date: Date): string {
   return `${y}-${m}`;
 }
 
+/**
+ * Production window a bill covers: the 18th of the previous month through the
+ * 17th of the billing month (meter reading dates), not the calendar month. So
+ * the August 2026 bill is matched against 18 Jul – 17 Aug 2026 production.
+ */
+function billingProductionRange(month: Date): { gte: Date; lte: Date } {
+  const y = month.getUTCFullYear();
+  const m = month.getUTCMonth();
+  return {
+    gte: new Date(Date.UTC(y, m - 1, 18)),
+    lte: new Date(Date.UTC(y, m, 17)),
+  };
+}
+
 export default async function ElectricityPage() {
   await requireAdmin();
 
@@ -19,16 +39,44 @@ export default async function ElectricityPage() {
     orderBy: { month: "desc" },
   });
 
-  const rows = bills.map((b) => ({
-    id: b.id,
-    month: billToMonthStr(b.month),
-    billAmount: b.billAmount.toNumber(),
-    unitsConsumed: b.unitsConsumed.toNumber(),
-    pricePerUnit:
-      b.unitsConsumed.toNumber() > 0
-        ? b.billAmount.toNumber() / b.unitsConsumed.toNumber()
-        : 0,
-  }));
+  // Production for every billing window in one query, summed per bill below.
+  const ranges = bills.map((b) => billingProductionRange(b.month));
+  const productionDays = ranges.length
+    ? await prisma.productionDay.findMany({
+        where: {
+          date: {
+            gte: new Date(Math.min(...ranges.map((r) => r.gte.getTime()))),
+            lte: new Date(Math.max(...ranges.map((r) => r.lte.getTime()))),
+          },
+        },
+        select: { date: true, dayShiftBags: true, nightShiftBags: true },
+      })
+    : [];
+
+  const rows = bills.map((b, i) => {
+    const range = ranges[i];
+    const bags = productionDays
+      .filter((d) => d.date >= range.gte && d.date <= range.lte)
+      .reduce(
+        (sum, d) => sum + d.dayShiftBags.toNumber() + d.nightShiftBags.toNumber(),
+        0
+      );
+    const productionKg = bags * BAG_KG;
+    const billAmount = b.billAmount.toNumber();
+    return {
+      id: b.id,
+      month: billToMonthStr(b.month),
+      billAmount,
+      unitsConsumed: b.unitsConsumed.toNumber(),
+      pricePerUnit:
+        b.unitsConsumed.toNumber() > 0
+          ? billAmount / b.unitsConsumed.toNumber()
+          : 0,
+      productionKg,
+      periodLabel: formatDateRangeLabel(range.gte, range.lte),
+      costPerKg: productionKg > 0 ? billAmount / productionKg : null,
+    };
+  });
 
   const defaultMonth = currentMonthParam();
 
@@ -39,7 +87,8 @@ export default async function ElectricityPage() {
           Electricity Bills
         </h1>
         <p className="mt-0.5 text-sm text-neutral-500">
-          One bill per month — add or update below.
+          One bill per month — add or update below. Cost/KG uses production
+          from the 18th of the previous month to the 17th of the billing month.
         </p>
       </div>
 
@@ -59,6 +108,10 @@ export default async function ElectricityPage() {
                 <th className="px-4 py-3 font-medium text-right">Bill Amount</th>
                 <th className="px-4 py-3 font-medium text-right">Units (kWh)</th>
                 <th className="px-4 py-3 font-medium text-right">Price/Unit</th>
+                <th className="px-4 py-3 font-medium text-right">
+                  Production (KG)
+                </th>
+                <th className="px-4 py-3 font-medium text-right">Cost/KG</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -66,7 +119,7 @@ export default async function ElectricityPage() {
               {rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
                     No bills recorded yet.
@@ -89,6 +142,21 @@ export default async function ElectricityPage() {
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-500">
                     {formatPKR(row.pricePerUnit)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
+                    {row.productionKg.toLocaleString("en-PK", {
+                      maximumFractionDigits: 0,
+                    })}
+                    <div className="text-xs font-normal text-neutral-400">
+                      {row.periodLabel}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-neutral-900 dark:text-neutral-50">
+                    {row.costPerKg === null ? (
+                      <span className="font-normal text-neutral-400">—</span>
+                    ) : (
+                      formatPKR(row.costPerKg)
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
