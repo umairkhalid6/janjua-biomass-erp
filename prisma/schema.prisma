@@ -212,12 +212,17 @@ model ElectricityBill {
   @@map("electricity_bills")
 }
 
-// Thekadar (contractor) rate history — labor cost = bags × 40 kg × rate_per_kg.
+// Thekadar (contractor) rate history. The two shifts are paid different rates,
+// so labor cost = day bags × 40 kg × dayRatePerKg + night bags × 40 kg ×
+// nightRatePerKg, using the row effective on the production date (see
+// v_labor_daily). A rate change is a NEW row — never an edit — so past
+// production keeps the rate it was costed at.
 model ContractorRate {
-  id            String   @id @default(cuid())
-  effectiveFrom DateTime @unique @db.Date
-  ratePerKg     Decimal  @db.Decimal(8, 2)
-  createdAt     DateTime @default(now())
+  id             String   @id @default(cuid())
+  effectiveFrom  DateTime @unique @db.Date
+  dayRatePerKg   Decimal  @db.Decimal(8, 2)
+  nightRatePerKg Decimal  @db.Decimal(8, 2)
+  createdAt      DateTime @default(now())
 
   @@map("contractor_rates")
 }

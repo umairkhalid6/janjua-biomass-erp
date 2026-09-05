@@ -21,13 +21,19 @@ function Submit({ label }: { label: string }) {
   );
 }
 
-export function AddContractorRateForm() {
+export function AddContractorRateForm({
+  currentDayRate,
+  currentNightRate,
+}: {
+  currentDayRate?: number;
+  currentNightRate?: number;
+}) {
   const [state, action] = useActionState<ActionState, FormData>(
     createContractorRate,
     {}
   );
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-2">
+    <form action={action} className="grid gap-3 sm:grid-cols-3">
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Effective From
@@ -37,21 +43,39 @@ export function AddContractorRateForm() {
           required
           className={input}
         />
+        <p className="mt-1 text-xs text-neutral-500">
+          Today or later — past production keeps its old rate.
+        </p>
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Rate per kg (PKR)
+          Day shift rate / kg (PKR)
         </label>
         <input
-          name="ratePerKg"
+          name="dayRatePerKg"
           type="number"
           step="0.01"
           min="0.01"
           required
+          defaultValue={currentDayRate}
           className={input}
         />
       </div>
-      <div className="sm:col-span-2 flex items-center gap-3">
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Night shift rate / kg (PKR)
+        </label>
+        <input
+          name="nightRatePerKg"
+          type="number"
+          step="0.01"
+          min="0.01"
+          required
+          defaultValue={currentNightRate}
+          className={input}
+        />
+      </div>
+      <div className="sm:col-span-3 flex items-center gap-3">
         <Submit label="Add Rate" />
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>

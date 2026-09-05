@@ -575,3 +575,35 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 - **Verified live** by temporarily setting an opening balance on Ali Hassan (supplier) and AH Bakers
   (customer), checking both signs on both sides — cards, subtexts, list rows and footer all
   reconciled — then resetting both to 0. No account in the local DB carries an opening balance today.
+
+### Contractor labor is paid per shift — day rate ≠ night rate (2026-09-05)
+- **Owner's rule:** the day shift is paid 6.00 PKR/kg, the night shift 5.00 PKR/kg. Before this
+  the whole day's production was costed at one rate (6.00).
+- **`ContractorRate` carries both rates on one dated row** — `ratePerKg` was renamed to
+  `dayRatePerKg` and `nightRatePerKg` was added (migration
+  `20260905120000_shift_rates`). Keeping both rates on one `effectiveFrom` row means a rate change
+  is still ONE row and the "rate effective on the production date" lateral lookup is unchanged;
+  two parallel rate tables would let the shifts drift onto different effective dates.
+- **`v_labor_daily` costs each shift separately:**
+  `ROUND(dayShiftBags × 40 × dayRate, 2) + ROUND(nightShiftBags × 40 × nightRate, 2)`. It now also
+  exposes `day_bags` / `night_bags` / `day_rate_per_kg` / `night_rate_per_kg` / `day_labor_cost` /
+  `night_labor_cost`; the old blended `rate_per_kg` column is **gone** — with two rates it had no
+  honest value. Nothing read it (only `labor_cost` is consumed).
+- Dropping `v_labor_daily` cascades to `v_contractor_ledger`, `v_monthly_summary` and
+  `v_daily_summary`; the migration recreates all three verbatim. Their labor_cost changes because
+  the source view changed, not because their own SQL did.
+- **Backfill:** every pre-existing rate row's single rate WAS the day rate (renamed, not re-entered)
+  and the night shift has always been paid 5.00, so the migration sets `nightRatePerKg = 5.00` on
+  existing rows. Past night production re-costs automatically — labor cost is derived by the view,
+  never stored per production row, so there is nothing else to backfill.
+- **Settings changes are future-only.** `createContractorRate` rejects an `effectiveFrom` earlier
+  than today ("Rate changes apply to future production only"); historical corrections are a
+  migration, not a settings edit. Because a rate can now be dated ahead, the settings table marks
+  the newest already-effective row **Current** and later rows **Scheduled** — it used to badge
+  `rows[0]` as Current, which would have lied about a future-dated rate. The add-rate form prefills
+  both fields with the rates in force now, so changing one shift doesn't mean retyping the other.
+- **Verified on the local DB:** 2,821 day bags × 40 × 6 = 677,040 + 653 night bags × 40 × 5 =
+  130,600 → 807,640, down exactly 26,120 (= night kg × 1 PKR) from the old 833,760; profit rose and
+  the contractor balance fell by the same 26,120 across `v_daily_summary`, `v_monthly_summary` and
+  `v_contractor_ledger`. A test rate dated 2026-10-01 left all past days untouched and applied from
+  its own date; the test row was deleted afterwards.
