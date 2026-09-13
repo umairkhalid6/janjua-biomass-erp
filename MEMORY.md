@@ -607,3 +607,17 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   the contractor balance fell by the same 26,120 across `v_daily_summary`, `v_monthly_summary` and
   `v_contractor_ledger`. A test rate dated 2026-10-01 left all past days untouched and applied from
   its own date; the test row was deleted afterwards.
+
+### Contractor payments & adjustments are editable/deletable (2026-09-13)
+- Owner asked to edit or delete any entered contractor ledger data. `/contractor` Payments and
+  Adjustments tables now have an Edit (shared `EditDialog`) + Delete (`DeleteButton` confirm) column,
+  ADMIN-only like the rest of the page.
+- `createPayment` / `createAdjustment` double as update actions: a hidden `id` field switches
+  create → update (same pattern as `upsertElectricityBill`). Deletes use `deleteMany` so a
+  double-clicked/stale delete is a no-op instead of a P2025 crash; stale updates return a friendly error.
+  Both revalidate `/contractor` and `/reports/contractor`.
+- **EARNED rows are not editable here** — they are derived from production (`v_labor_daily`); fix
+  them by editing the production entry. `v_contractor_ledger` exposes no row ids, so the read-only
+  `/reports/contractor` ledger was left as is (no migration).
+- Adjustment edit form reconstructs direction from the stored sign (amount ≥ 0 → Receiving) and
+  shows the magnitude, keeping the "never type a minus" rule.

@@ -7,12 +7,18 @@ import { parseDateInput } from "@/lib/format";
 
 export type ActionState = { error?: string; ok?: string };
 
+// Payments and adjustments each use one save action: a hidden `id` field
+// (sent only by the edit dialogs) turns the create into an update.
+
+const MISSING = { error: "This entry no longer exists — it may have been deleted." };
+
 export async function createPayment(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   await requireAdmin();
 
+  const id = String(formData.get("id") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();
   const amountStr = String(formData.get("amount") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
@@ -25,13 +31,22 @@ export async function createPayment(
     return { error: "Amount must be a positive number." };
 
   const date = parseDateInput(dateStr);
+  const data = { date, amount, notes: notes || null };
 
-  await prisma.contractorPayment.create({
-    data: { date, amount, notes: notes || null },
-  });
+  try {
+    if (id) {
+      await prisma.contractorPayment.update({ where: { id }, data });
+    } else {
+      await prisma.contractorPayment.create({ data });
+    }
+  } catch (err: unknown) {
+    if ((err as { code?: string })?.code === "P2025") return MISSING;
+    throw err;
+  }
 
   revalidatePath("/contractor");
-  return { ok: "Payment recorded." };
+  revalidatePath("/reports/contractor");
+  return { ok: id ? "Payment updated." : "Payment recorded." };
 }
 
 export async function createAdjustment(
@@ -40,6 +55,7 @@ export async function createAdjustment(
 ): Promise<ActionState> {
   await requireAdmin();
 
+  const id = String(formData.get("id") ?? "").trim();
   const dateStr = String(formData.get("date") ?? "").trim();
   const amountStr = String(formData.get("amount") ?? "").trim();
   const direction = String(formData.get("direction") ?? "").trim();
@@ -60,19 +76,42 @@ export async function createAdjustment(
   const amount = direction === "paying" ? -magnitude : magnitude;
 
   const date = parseDateInput(dateStr);
+  const data = { date, amount, reason };
 
   try {
-    await prisma.contractorAdjustment.create({
-      data: { date, amount, reason },
-    });
+    if (id) {
+      await prisma.contractorAdjustment.update({ where: { id }, data });
+    } else {
+      await prisma.contractorAdjustment.create({ data });
+    }
   } catch (err: unknown) {
     const e = err as { code?: string };
     if (e?.code === "P2002") {
       return { error: "An adjustment with this date and reason already exists." };
     }
+    if (e?.code === "P2025") return MISSING;
     throw err;
   }
 
   revalidatePath("/contractor");
-  return { ok: "Adjustment recorded." };
+  revalidatePath("/reports/contractor");
+  return { ok: id ? "Adjustment updated." : "Adjustment recorded." };
+}
+
+export async function deletePayment(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.contractorPayment.deleteMany({ where: { id } });
+  revalidatePath("/contractor");
+  revalidatePath("/reports/contractor");
+}
+
+export async function deleteAdjustment(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.contractorAdjustment.deleteMany({ where: { id } });
+  revalidatePath("/contractor");
+  revalidatePath("/reports/contractor");
 }

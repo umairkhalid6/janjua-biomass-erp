@@ -21,26 +21,46 @@ function Submit({ label }: { label: string }) {
   );
 }
 
-export function PaymentForm() {
+type PaymentRow = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  notes: string | null;
+};
+
+type AdjustmentRow = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number; // signed: negative = paying
+  reason: string;
+};
+
+export function PaymentForm({ existing }: { existing?: PaymentRow }) {
   const [state, action] = useActionState<ActionState, FormData>(
     createPayment,
     {}
   );
   const [formKey, setFormKey] = useState(0);
 
-  // Clear the form after a successful save; remounting via key resets the
+  // Clear the add form after a successful save; remounting via key resets the
   // uncontrolled fields and puts the date back to today.
   useEffect(() => {
-    if (state.ok) setFormKey((k) => k + 1);
-  }, [state]);
+    if (state.ok && !existing) setFormKey((k) => k + 1);
+  }, [state, existing]);
 
   return (
     <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-3">
+      {existing && <input type="hidden" name="id" value={existing.id} />}
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
-        <DateInput name="date" required className={input} />
+        <DateInput
+          name="date"
+          required
+          defaultValue={existing?.date}
+          className={input}
+        />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -53,6 +73,7 @@ export function PaymentForm() {
           min="0.01"
           placeholder="0.00"
           required
+          defaultValue={existing?.amount ?? ""}
           className={input}
         />
       </div>
@@ -64,11 +85,12 @@ export function PaymentForm() {
           name="notes"
           type="text"
           placeholder="Any notes…"
+          defaultValue={existing?.notes ?? ""}
           className={input}
         />
       </div>
       <div className="sm:col-span-3 flex items-center gap-3">
-        <Submit label="Record Payment" />
+        <Submit label={existing ? "Update Payment" : "Record Payment"} />
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>
         )}
@@ -80,32 +102,43 @@ export function PaymentForm() {
   );
 }
 
-export function AdjustmentForm() {
+export function AdjustmentForm({ existing }: { existing?: AdjustmentRow }) {
   const [state, action] = useActionState<ActionState, FormData>(
     createAdjustment,
     {}
   );
   const [formKey, setFormKey] = useState(0);
 
-  // Clear the form after a successful save; remounting via key resets the
+  // Clear the add form after a successful save; remounting via key resets the
   // uncontrolled fields and puts the date back to today.
   useEffect(() => {
-    if (state.ok) setFormKey((k) => k + 1);
-  }, [state]);
+    if (state.ok && !existing) setFormKey((k) => k + 1);
+  }, [state, existing]);
 
   return (
     <form key={formKey} action={action} className="grid gap-3 sm:grid-cols-2">
+      {existing && <input type="hidden" name="id" value={existing.id} />}
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Date
         </label>
-        <DateInput name="date" required className={input} />
+        <DateInput
+          name="date"
+          required
+          defaultValue={existing?.date}
+          className={input}
+        />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Type
         </label>
-        <select name="direction" required defaultValue="paying" className={input}>
+        <select
+          name="direction"
+          required
+          defaultValue={existing && existing.amount >= 0 ? "receiving" : "paying"}
+          className={input}
+        >
           <option value="paying">Paying — we pay the contractor</option>
           <option value="receiving">Receiving — contractor pays us</option>
         </select>
@@ -121,6 +154,7 @@ export function AdjustmentForm() {
           min="0.01"
           required
           placeholder="Amount"
+          defaultValue={existing ? Math.abs(existing.amount) : ""}
           className={input}
         />
       </div>
@@ -133,11 +167,12 @@ export function AdjustmentForm() {
           type="text"
           required
           placeholder="e.g. Opening balance, Correction…"
+          defaultValue={existing?.reason ?? ""}
           className={input}
         />
       </div>
       <div className="sm:col-span-2 flex items-center gap-3">
-        <Submit label="Record Adjustment" />
+        <Submit label={existing ? "Update Adjustment" : "Record Adjustment"} />
         {state.error && (
           <span className="text-sm text-red-600">{state.error}</span>
         )}

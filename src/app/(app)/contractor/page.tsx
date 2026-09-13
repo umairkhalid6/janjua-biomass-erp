@@ -18,7 +18,10 @@ import {
   FilterSelect,
   ResetFilters,
 } from "@/components/table-filters";
+import { DeleteButton } from "@/components/delete-button";
+import { EditDialog } from "@/components/edit-dialog";
 import { PaymentForm, AdjustmentForm } from "./contractor-forms";
+import { deleteAdjustment, deletePayment } from "./actions";
 
 type LedgerRow = {
   date: Date;
@@ -223,13 +226,14 @@ export default async function ContractorPage({
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
                 <th className="px-4 py-3 font-medium">Notes</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
               {pay.pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={3}
+                    colSpan={4}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
                     {hasPayFilters
@@ -249,6 +253,17 @@ export default async function ContractorPage({
                   <td className="px-4 py-3 text-xs text-neutral-500">
                     {r.notes ?? ""}
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <EditDialog title="Edit Payment">
+                        <PaymentForm existing={r} />
+                      </EditDialog>
+                      <form action={deletePayment}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <DeleteButton confirmMessage="Delete this payment? The contractor balance will be recalculated." />
+                      </form>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -261,7 +276,7 @@ export default async function ContractorPage({
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {formatPKR(totalPayments)}
                   </td>
-                  <td />
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             )}
@@ -313,13 +328,14 @@ export default async function ContractorPage({
                 <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
                 <th className="px-4 py-3 font-medium">Reason</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
               {adj.pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-4 py-6 text-center text-sm text-neutral-400"
                   >
                     {hasAdjFilters
@@ -350,6 +366,17 @@ export default async function ContractorPage({
                   <td className="px-4 py-3 text-xs text-neutral-500">
                     {r.reason}
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <EditDialog title="Edit Adjustment">
+                        <AdjustmentForm existing={r} />
+                      </EditDialog>
+                      <form action={deleteAdjustment}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <DeleteButton confirmMessage="Delete this adjustment? The contractor balance will be recalculated." />
+                      </form>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -366,7 +393,7 @@ export default async function ContractorPage({
                     {totalAdjustments >= 0 ? "+" : ""}
                     {formatPKR(totalAdjustments)}
                   </td>
-                  <td />
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             )}
