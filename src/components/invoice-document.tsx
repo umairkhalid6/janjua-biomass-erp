@@ -10,6 +10,7 @@
 
 import { formatDate, formatPKR } from "@/lib/format";
 import { BAG_KG } from "@/lib/constants";
+import { BrandMark } from "@/components/brand-mark";
 
 export type InvoiceDocumentProps = {
   invoiceLabel: string;
@@ -30,21 +31,6 @@ export type InvoiceDocumentProps = {
   /** Optional DOM id on the root — used to capture the invoice as an image. */
   id?: string;
 };
-
-/** Simple CSS/SVG brand mark: a leaf inside a dark-green rounded tile. */
-function BrandMark() {
-  return (
-    <div
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-800 [print-color-adjust:exact]"
-      aria-hidden
-    >
-      <svg viewBox="0 0 24 24" className="h-7 w-7 text-emerald-50" fill="currentColor">
-        {/* Leaf */}
-        <path d="M19.5 4.5c-6.5-.6-11.2 1.3-13.3 4.6-1.5 2.4-1.3 5.3.2 7.4.4-2.7 1.7-5.2 3.8-7.1a13 13 0 0 1 5.3-2.9c-2.4 1.3-4.4 3-5.8 5.2A13.6 13.6 0 0 0 7.6 18c.4.4.8.7 1.3 1 2.7 1.3 5.9.8 8-1.3 2.6-2.6 2.9-8.4 2.6-13.2z" />
-      </svg>
-    </div>
-  );
-}
 
 export function InvoiceDocument({
   invoiceLabel,
