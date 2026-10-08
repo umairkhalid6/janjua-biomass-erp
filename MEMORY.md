@@ -218,9 +218,12 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   `STATIC_CACHE` version string in sw.js when changing caching behavior.
 - **Registration:** `src/components/sw-register.tsx` ("use client", production only),
   rendered from the root layout.
-- **Icons:** SVG templates in `public/icons/*.svg` + `public/apple-touch-icon.svg`,
-  rendered to PNG with macOS `qlmanage -t -s <size>` (the hand-rolled PNG writer in
-  `scripts/generate-icons.js` produced corrupt files — do not reuse it for PNGs).
+- **Icons:** all PNGs made from the round company logo (green ring + leaf/flame/gear
+  emblem, on a white circle). Favicon: `src/app/favicon.ico` + `public/favicon-{192,512}.png`;
+  home screen: `public/icons/icon-{192,512}.png` (round), `icon-*-maskable.png` (logo at
+  80% on white square), `public/apple-touch-icon.png` (logo at 90% on white square).
+  There is no generator script — the old `scripts/generate-icons.js` ("JB" design) was
+  deleted; regenerate icons from the source logo image if they ever need changing.
 - **Manifest:** `public/manifest.json`, dark green theme (#065f46), standalone display;
   wired via `metadata`/`viewport` exports in `src/app/layout.tsx`.
 

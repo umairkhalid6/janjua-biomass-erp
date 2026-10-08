@@ -1,7 +1,7 @@
 // Minimal service worker: cache-first for immutable static assets only.
 // Documents, API calls, and server actions are never intercepted, so
 // financial data is always fetched live from the server.
-const STATIC_CACHE = "static-v1";
+const STATIC_CACHE = "static-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 
