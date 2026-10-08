@@ -4,9 +4,11 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatDate,
+  formatDateRangeLabel,
   formatMonth,
   formatPKR,
   monthRange,
+  parseCustomRangeParams,
   toDateInputValue,
 } from "@/lib/format";
 import { MATERIAL_LABELS } from "@/lib/constants";
@@ -29,6 +31,8 @@ const MATERIAL_KEYS = Object.keys(MATERIAL_LABELS) as MaterialType[];
 
 type PurchaseSearchParams = {
   month?: string;
+  from?: string;
+  to?: string;
   material?: string;
   supplier?: string;
   status?: string;
@@ -53,7 +57,10 @@ export default async function PurchasesPage({
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
   const material = (sp.material as MaterialType | undefined) ?? null;
-  const { gte, lte } = monthRange(month);
+  // An explicit ?from=&to= range overrides the month picker.
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? monthRange(month);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : formatMonth(month);
 
   const supplierId = sp.supplier ?? null;
   const status =
@@ -161,11 +168,11 @@ export default async function PurchasesPage({
             Purchases
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            {formatMonth(month)}
+            {rangeLabel}
           </p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <MonthPicker value={month} allowCustomRange />
         </Suspense>
       </div>
 
@@ -247,7 +254,7 @@ export default async function PurchasesPage({
                   >
                     {hasFilters
                       ? "No purchases match the current filters."
-                      : `No purchases for ${formatMonth(month)}${
+                      : `No purchases for ${rangeLabel}${
                           material ? ` (${MATERIAL_LABELS[material]})` : ""
                         }.`}
                   </td>
@@ -332,7 +339,7 @@ export default async function PurchasesPage({
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
-                    {hasFilters ? "Filtered Total" : "Month Total"}
+                    {hasFilters ? "Filtered Total" : customRange ? "Range Total" : "Month Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {totalKg.toFixed(2)} kg

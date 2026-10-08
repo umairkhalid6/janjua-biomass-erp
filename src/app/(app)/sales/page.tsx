@@ -5,9 +5,11 @@ import { requireUser } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatDate,
+  formatDateRangeLabel,
   formatMonth,
   formatPKR,
   monthRange,
+  parseCustomRangeParams,
   toDateInputValue,
 } from "@/lib/format";
 import { paginate, parseNumberParam } from "@/lib/pagination";
@@ -35,6 +37,8 @@ export default async function SalesPage({
 }: {
   searchParams: Promise<{
     month?: string;
+    from?: string;
+    to?: string;
     customer?: string;
     invoice?: string;
     status?: string;
@@ -46,7 +50,10 @@ export default async function SalesPage({
   const session = await requireUser();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
-  const { gte, lte } = monthRange(month);
+  // An explicit ?from=&to= range overrides the month picker.
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? monthRange(month);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : formatMonth(month);
   const isAdmin = session.role === "ADMIN";
 
   const customerId = sp.customer ?? null;
@@ -147,12 +154,12 @@ export default async function SalesPage({
             Sales
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            {formatMonth(month)}
+            {rangeLabel}
             {!isAdmin && " · amounts shown on your own entries"}
           </p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <MonthPicker value={month} allowCustomRange />
         </Suspense>
       </div>
 
@@ -231,7 +238,7 @@ export default async function SalesPage({
                   >
                     {hasFilters
                       ? "No sales match the current filters."
-                      : `No sales for ${formatMonth(month)}.`}
+                      : `No sales for ${rangeLabel}.`}
                   </td>
                 </tr>
               )}
@@ -323,7 +330,7 @@ export default async function SalesPage({
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
-                    {hasFilters ? "Filtered Total" : "Month Total"}
+                    {hasFilters ? "Filtered Total" : customRange ? "Range Total" : "Month Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {totalBags.toFixed(2)} bags

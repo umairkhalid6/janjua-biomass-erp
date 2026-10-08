@@ -4,9 +4,11 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatDate,
+  formatDateRangeLabel,
   formatMonth,
   formatPKR,
   monthRange,
+  parseCustomRangeParams,
   toDateInputValue,
 } from "@/lib/format";
 import { paginate, parseNumberParam } from "@/lib/pagination";
@@ -41,6 +43,8 @@ export default async function ContractorPage({
 }: {
   searchParams: Promise<{
     month?: string;
+    from?: string;
+    to?: string;
     payQ?: string;
     payMin?: string;
     payMax?: string;
@@ -53,7 +57,10 @@ export default async function ContractorPage({
   await requireAdmin();
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
-  const { gte, lte } = monthRange(month);
+  // An explicit ?from=&to= range overrides the month picker.
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? monthRange(month);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : formatMonth(month);
 
   const payQuery = sp.payQ?.trim().toLowerCase() ?? "";
   const payMin = parseNumberParam(sp.payMin);
@@ -129,11 +136,11 @@ export default async function ContractorPage({
             Contractor (Thekadar)
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            {formatMonth(month)}
+            {rangeLabel}
           </p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <MonthPicker value={month} allowCustomRange pageParams={["payPage", "adjPage"]} />
         </Suspense>
       </div>
 
@@ -192,7 +199,7 @@ export default async function ContractorPage({
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="px-4 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Payments — {formatMonth(month)}
+            Payments — {rangeLabel}
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
@@ -238,7 +245,7 @@ export default async function ContractorPage({
                   >
                     {hasPayFilters
                       ? "No payments match the current filters."
-                      : "No payments this month."}
+                      : `No payments for ${rangeLabel}.`}
                   </td>
                 </tr>
               )}
@@ -297,7 +304,7 @@ export default async function ContractorPage({
       <section className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="px-4 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-            Adjustments — {formatMonth(month)}
+            Adjustments — {rangeLabel}
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
@@ -340,7 +347,7 @@ export default async function ContractorPage({
                   >
                     {hasAdjFilters
                       ? "No adjustments match the current filters."
-                      : "No adjustments this month."}
+                      : `No adjustments for ${rangeLabel}.`}
                   </td>
                 </tr>
               )}

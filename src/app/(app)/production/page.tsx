@@ -4,8 +4,10 @@ import { requireUser } from "@/lib/auth-helpers";
 import {
   currentMonthParam,
   formatDate,
+  formatDateRangeLabel,
   formatMonth,
   monthRange,
+  parseCustomRangeParams,
   toDateInputValue,
 } from "@/lib/format";
 import { paginate } from "@/lib/pagination";
@@ -32,6 +34,8 @@ export default async function ProductionPage({
 }: {
   searchParams: Promise<{
     month?: string;
+    from?: string;
+    to?: string;
     shift?: string;
     user?: string;
     q?: string;
@@ -42,7 +46,10 @@ export default async function ProductionPage({
   const isAdmin = user.role === "ADMIN";
   const sp = await searchParams;
   const month = sp.month ?? currentMonthParam();
-  const { gte, lte } = monthRange(month);
+  // An explicit ?from=&to= range overrides the month picker.
+  const customRange = parseCustomRangeParams(sp.from, sp.to);
+  const { gte, lte } = customRange ?? monthRange(month);
+  const rangeLabel = customRange ? formatDateRangeLabel(gte, lte) : formatMonth(month);
 
   const shift = sp.shift === "day" || sp.shift === "night" ? sp.shift : null;
   const userId = sp.user ?? null;
@@ -117,11 +124,11 @@ export default async function ProductionPage({
             Production Log
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            {formatMonth(month)}
+            {rangeLabel}
           </p>
         </div>
         <Suspense>
-          <MonthPicker value={month} />
+          <MonthPicker value={month} allowCustomRange />
         </Suspense>
       </div>
 
@@ -179,7 +186,7 @@ export default async function ProductionPage({
                   >
                     {hasFilters
                       ? "No entries match the current filters."
-                      : `No entries for ${formatMonth(month)}.`}
+                      : `No entries for ${rangeLabel}.`}
                   </td>
                 </tr>
               )}
@@ -227,7 +234,7 @@ export default async function ProductionPage({
               <tfoot className="border-t-2 border-neutral-300 bg-neutral-50 text-sm font-semibold dark:border-neutral-700 dark:bg-neutral-800">
                 <tr>
                   <td className="px-4 py-3 text-neutral-900 dark:text-neutral-50">
-                    {hasFilters ? "Filtered Total" : "Month Total"}
+                    {hasFilters ? "Filtered Total" : customRange ? "Range Total" : "Month Total"}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {totalDay.toFixed(2)}
