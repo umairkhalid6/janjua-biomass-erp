@@ -250,3 +250,38 @@ model ContractorAdjustment {
   @@unique([date, reason])
   @@map("contractor_adjustments")
 }
+
+// --- Standalone invoices ---------------------------------------------------
+// Free-form invoices the admin types up by hand (Invoices page). Deliberately
+// NOT linked to sales, customers, stock or any ledger — they never affect
+// balances, reports or production figures. Customer details are plain text.
+
+model CustomInvoice {
+  id              String              @id @default(cuid())
+  invoiceNo       Int                 @unique @default(autoincrement())
+  date            DateTime            @db.Date
+  customerName    String
+  customerAddress String?
+  customerPhone   String?
+  notes           String?
+  items           CustomInvoiceItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([date])
+  @@map("custom_invoices")
+}
+
+model CustomInvoiceItem {
+  id           String        @id @default(cuid())
+  invoiceId    String
+  invoice      CustomInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sortOrder    Int           @default(0)
+  description  String
+  quantityBags Decimal       @db.Decimal(12, 2)
+  bagSizeKg    Decimal       @db.Decimal(10, 2)
+  ratePerKg    Decimal       @db.Decimal(14, 2)
+
+  @@index([invoiceId])
+  @@map("custom_invoice_items")
+}

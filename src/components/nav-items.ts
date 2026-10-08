@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", adminOnly: true },
   { href: "/production", label: "Production" },
   { href: "/sales", label: "Sales" },
+  { href: "/invoices", label: "Invoices", adminOnly: true },
   { href: "/purchases", label: "Purchases", adminOnly: true },
   { href: "/expenses", label: "Expenses", adminOnly: true },
   { href: "/reports/overview", label: "Overview", adminOnly: true },

@@ -35,6 +35,7 @@ const ADMIN_PREFIXES = [
   "/electricity",
   "/purchases",
   "/expenses",
+  "/invoices",
 ];
 
 export const authConfig = {

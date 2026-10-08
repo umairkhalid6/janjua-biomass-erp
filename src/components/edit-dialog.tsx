@@ -7,10 +7,13 @@ import { useEffect, useState, type ReactNode } from "react";
 export function EditDialog({
   title,
   trigger = "Edit",
+  wide = false,
   children,
 }: {
   title: string;
   trigger?: string;
+  /** Wider panel for forms with multi-column rows (e.g. invoice items). */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -44,7 +47,7 @@ export function EditDialog({
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="w-full max-w-lg rounded-xl border border-neutral-200 bg-white p-4 shadow-xl dark:border-neutral-700 dark:bg-neutral-900">
+          <div className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-neutral-200 bg-white p-4 shadow-xl dark:border-neutral-700 dark:bg-neutral-900`}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
                 {title}

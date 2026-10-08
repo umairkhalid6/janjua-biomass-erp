@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { domToPng } from "modern-screenshot";
+import { captureElementPng, downloadFile } from "@/lib/capture-element";
 import { invoiceCaption, type InvoiceAmounts } from "@/lib/invoice-share";
 
 // Shares the invoice as an IMAGE (not a link): renders the on-page invoice
@@ -16,13 +16,15 @@ export function ShareWhatsappButton({
   customerName,
   invoiceLabel,
   amounts,
+  caption: captionOverride,
   className,
 }: {
   targetId: string;
   fileBaseName: string; // e.g. "invoice-INV-00006" (no extension)
   customerName: string;
   invoiceLabel: string;
-  amounts: InvoiceAmounts; // pre-formatted amount breakdown for the caption
+  amounts?: InvoiceAmounts; // pre-formatted amount breakdown for the caption
+  caption?: string; // full caption text; replaces the amounts-based one
   className?: string;
 }) {
   const [pending, setPending] = useState(false);
@@ -30,50 +32,9 @@ export function ShareWhatsappButton({
   const [notice, setNotice] = useState<string | null>(null);
 
   async function renderInvoicePng(): Promise<File> {
-    const node = document.getElementById(targetId);
-    if (!node) throw new Error("Could not find the invoice on the page.");
-
-    // Capture a fixed desktop-width CLONE rendered off-screen. Capturing the
-    // live node on a narrow phone viewport clips the invoice: its table
-    // (whitespace-nowrap cells + a shrink-0 details column) overflows the
-    // element's box, and the screenshot cuts off everything past the right
-    // edge (the Amount column). Forcing a fixed width guarantees the PNG looks
-    // the same on every device — the way it renders on desktop.
-    const CAPTURE_WIDTH = 720; // ~max-w-2xl content; wide enough for the table
-    const wrapper = document.createElement("div");
-    wrapper.style.cssText =
-      "position:fixed;left:-100000px;top:0;width:" +
-      `${CAPTURE_WIDTH}px;background:#ffffff;pointer-events:none;z-index:-1;`;
-    const clone = node.cloneNode(true) as HTMLElement;
-    clone.style.width = `${CAPTURE_WIDTH}px`;
-    clone.style.maxWidth = "none";
-    clone.style.margin = "0";
-    wrapper.appendChild(clone);
-    document.body.appendChild(wrapper);
-
-    try {
-      // scale 2 → crisp on phone screens; force white so nothing prints grey.
-      const dataUrl = await domToPng(clone, {
-        scale: 2,
-        width: CAPTURE_WIDTH,
-        backgroundColor: "#ffffff",
-      });
-      const blob = await (await fetch(dataUrl)).blob();
-      return new File([blob], `${fileBaseName}.png`, { type: "image/png" });
-    } finally {
-      wrapper.remove();
-    }
-  }
-
-  function downloadFile(file: File) {
-    const url = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const { dataUrl } = await captureElementPng(targetId);
+    const blob = await (await fetch(dataUrl)).blob();
+    return new File([blob], `${fileBaseName}.png`, { type: "image/png" });
   }
 
   async function handleShare() {
@@ -85,7 +46,11 @@ export function ShareWhatsappButton({
       const nav = navigator as Navigator & {
         canShare?: (data?: ShareData) => boolean;
       };
-      const caption = invoiceCaption({ customerName, invoiceLabel, amounts });
+      const caption =
+        captionOverride ??
+        (amounts
+          ? invoiceCaption({ customerName, invoiceLabel, amounts })
+          : "");
 
       if (typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
         try {

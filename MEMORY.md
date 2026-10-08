@@ -77,6 +77,22 @@ Update it as significant decisions are made.
 
 ---
 
+### Standalone invoices (2026-10-08)
+- **Invoices** sidebar item (`/invoices`, ADMIN-only) lets the admin type up an invoice by hand:
+  customer name/address/phone, date, notes, and any number of line items (description, bags,
+  bag size kg, rate per kg; amount = bags × bag size × rate). Tables `custom_invoices` /
+  `custom_invoice_items` (migration `20261008084353_custom_invoices`).
+- **Deliberately unlinked** from sales, customers, stock, ledgers and reports — nothing reads
+  these tables except `/invoices`. Numbered `JB-00001` (own sequence) so they're never confused
+  with sales invoices (`INV-…`).
+- View page `/invoices/[id]` lives in the `(invoice)` route group (no app shell). "Download PDF"
+  (`src/components/download-pdf-button.tsx`) renders the invoice to an image via the shared
+  `src/lib/capture-element.ts` and places it on A4 with jsPDF (lazy-loaded) — a real file
+  download, unlike the sales invoice's print dialog. WhatsApp share reuses
+  `ShareWhatsappButton` with a custom `caption` prop.
+
+---
+
 ## Future Agents — Read This
 
 - Models: `prisma/schema.prisma` — DONE. Tables: users, customers, vendors, material_purchases
