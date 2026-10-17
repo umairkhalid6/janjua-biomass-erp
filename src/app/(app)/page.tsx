@@ -20,6 +20,11 @@ import {
 import { PeriodPicker } from "@/components/period-picker";
 import { GrainScope } from "@/components/grain-scope";
 import { DashboardProfitSection } from "@/components/chart-sections/dashboard-profit-section";
+import {
+  MaskedValue,
+  ValueVisibilityProvider,
+  ValueVisibilityToggle,
+} from "@/components/value-visibility";
 
 // Period totals: v_monthly_summary is month-grain, so a window is just a SUM
 // over the months in range. Postgres numerics arrive as strings via pg.
@@ -106,6 +111,7 @@ export default async function DashboardPage({
   }));
 
   return (
+    <ValueVisibilityProvider>
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -114,9 +120,12 @@ export default async function DashboardPage({
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">{rangeLabel}</p>
         </div>
-        <Suspense>
-          <PeriodPicker value={period} />
-        </Suspense>
+        <div className="flex flex-wrap items-center gap-2">
+          <ValueVisibilityToggle />
+          <Suspense>
+            <PeriodPicker value={period} />
+          </Suspense>
+        </div>
       </div>
 
       {/* Headline cards — totals for the selected period */}
@@ -144,7 +153,7 @@ export default async function DashboardPage({
             Contractor Balance
           </p>
           <p className="mt-1 text-2xl font-bold text-amber-800 dark:text-amber-400">
-            {formatPKR(Math.abs(contractorBalance))}
+            <MaskedValue value={formatPKR(Math.abs(contractorBalance))} />
           </p>
           <p className="mt-0.5 text-xs text-neutral-500">
             {contractorBalance >= 0 ? "Owed to contractor" : "Contractor owes"}
@@ -176,6 +185,7 @@ export default async function DashboardPage({
         </div>
       </div>
     </div>
+    </ValueVisibilityProvider>
   );
 }
 
@@ -201,7 +211,9 @@ function StatCard({
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className={`mt-1 truncate text-lg font-bold sm:text-xl ${TONES[tone]}`}>{value}</p>
+      <p className={`mt-1 truncate text-lg font-bold sm:text-xl ${TONES[tone]}`}>
+        <MaskedValue value={value} />
+      </p>
       <p className="mt-0.5 text-xs text-neutral-500">{sub}</p>
     </div>
   );

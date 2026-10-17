@@ -6,6 +6,7 @@ import {
 } from "@/app/(app)/chart-actions";
 import { ProfitTrendChart } from "@/components/charts/profit-trend-chart";
 import { ScopedGrainPicker, useGrainData } from "@/components/grain-scope";
+import { MaskedBlock } from "@/components/value-visibility";
 import {
   bucketLabel,
   defaultGrainBuckets,
@@ -32,7 +33,9 @@ export function DashboardProfitSection({ initialData }: { initialData: ProfitPoi
       </div>
       <div className={`transition-opacity ${pending ? "opacity-50" : ""}`} aria-busy={pending}>
         {trend.length > 0 ? (
-          <ProfitTrendChart data={trend} />
+          <MaskedBlock>
+            <ProfitTrendChart data={trend} />
+          </MaskedBlock>
         ) : (
           <div className="flex h-[200px] items-center justify-center text-sm text-neutral-400">
             No data yet.
