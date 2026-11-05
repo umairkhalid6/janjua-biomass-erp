@@ -72,7 +72,7 @@ export default async function OverviewPage() {
       prisma.$queryRaw<{ name: string; bags: string | number; revenue: string | number }[]>`
         SELECT c.name,
                SUM(s."quantityBags") AS bags,
-               SUM(s."quantityBags" * s."ratePerBag") AS revenue
+               SUM(s."quantityBags" * (s."ratePerBag" + s."loadingChargePerBag")) AS revenue
         FROM pellet_sales s JOIN customers c ON c.id = s."customerId"
         GROUP BY c.name ORDER BY 3 DESC LIMIT 10
       `,
@@ -161,6 +161,7 @@ export default async function OverviewPage() {
     { label: "Contractor (thekadar)", key: "labor" as const, total: totals.labor },
     { label: "Electricity", key: "electricity" as const, total: totals.electricity },
     { label: "Maintenance / other", key: "expenses" as const, total: totals.expenses },
+    { label: "Loading", key: "loading" as const, total: totals.loading },
   ];
 
   return (
@@ -310,6 +311,7 @@ export default async function OverviewPage() {
               labor: m.labor,
               electricity: m.electricity,
               expenses: m.expenses,
+              loading: m.loading,
             }))}
           />
         </Card>
@@ -368,10 +370,6 @@ export default async function OverviewPage() {
                   label="Profit / bag sold"
                   values={[...months.map((m) => formatPKR(m.profitPerBag)), formatPKR(profitPerBagAll)]}
                   strong
-                />
-                <Row
-                  label="Loading charges collected"
-                  values={[...months.map((m) => formatPKR(m.loading)), formatPKR(totals.loading)]}
                 />
               </tbody>
             </table>

@@ -14,6 +14,7 @@ export const CHART = {
   slate: "#64748b", // neutral / total
   indigo: "#4f46e5",
   teal: "#0d9488",
+  pink: "#db2777",
 } as const;
 
 // Rotating series colors for stacked/multi-series charts (e.g. materials).
@@ -23,6 +24,7 @@ export const SERIES = [
   CHART.indigo,
   CHART.blue,
   CHART.slate,
+  CHART.pink,
 ] as const;
 
 export const AXIS_TICK = { fontSize: 11, fill: "#64748b" };

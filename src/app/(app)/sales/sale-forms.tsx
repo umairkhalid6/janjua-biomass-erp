@@ -40,8 +40,8 @@ type SaleRow = {
 function RateHint() {
   return (
     <p className="mt-1 text-[11px] text-neutral-400">
-      Includes Rs {LOADING_CHARGE_PER_BAG}/bag loading charge (tracked
-      separately in records).
+      Includes Rs {LOADING_CHARGE_PER_BAG}/bag loading charge (counted as a
+      loading cost in reports).
     </p>
   );
 }

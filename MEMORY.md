@@ -640,3 +640,15 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   `/reports/contractor` ledger was left as is (no migration).
 - Adjustment edit form reconstructs direction from the stored sign (amount ≥ 0 → Receiving) and
   shows the magnitude, keeping the "never type a minus" rule.
+
+### Loading is a business cost, not a pass-through (2026-11-05)
+- Owner: the Rs 10/bag loading charge is a cost of doing business. Migration
+  `20261105120000_loading_as_cost` redefines `v_monthly_summary` / `v_daily_summary` (CREATE OR
+  REPLACE, same columns): `sales_revenue` and `avg_rate_per_bag` are now GROSS (pellet + loading =
+  the invoice rate typed in), and `loading_charges` is included in `total_cost`.
+- **Profit is unchanged** (+loading in revenue, +loading in cost). Verified locally: July revenue
+  and cost both +10,510, profit identical across both views.
+- UI: P&L shows "Loading" as a cost line (old "pass-through, not in profit" row removed); Overview
+  adds Loading to the cost table and cost-mix chart (new pink series color) and top-customer revenue
+  is gross; Dashboard gets a Loading stat card. Storage split (`ratePerBag` + `loadingChargePerBag`)
+  is untouched, so invoices and customer ledgers are unaffected.

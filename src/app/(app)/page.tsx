@@ -36,6 +36,7 @@ type PeriodTotalsRow = {
   labor_cost: string | number;
   expenses: string | number;
   electricity_cost: string | number;
+  loading_charges: string | number;
   total_cost: string | number;
   profit: string | number;
 };
@@ -72,6 +73,7 @@ export default async function DashboardPage({
         COALESCE(SUM(labor_cost), 0)                  AS labor_cost,
         COALESCE(SUM(expenses), 0)                    AS expenses,
         COALESCE(SUM(electricity_cost), 0)            AS electricity_cost,
+        COALESCE(SUM(loading_charges), 0)             AS loading_charges,
         COALESCE(SUM(total_cost), 0)                  AS total_cost,
         COALESCE(SUM(profit), 0)                      AS profit
       FROM v_daily_summary
@@ -99,6 +101,7 @@ export default async function DashboardPage({
   const laborCost = n(s?.labor_cost);
   const expenses = n(s?.expenses);
   const electricity = n(s?.electricity_cost);
+  const loading = n(s?.loading_charges);
   const totalCost = n(s?.total_cost);
   const profit = n(s?.profit);
   const bagsProduced = n(s?.bags_produced);
@@ -136,6 +139,7 @@ export default async function DashboardPage({
         <StatCard label="Contractor" value={formatPKR(laborCost)} sub="labor cost" tone="amber" />
         <StatCard label="Expenses" value={formatPKR(expenses)} sub="operating" tone="amber" />
         <StatCard label="Electricity" value={formatPKR(electricity)} sub="bills" tone="amber" />
+        <StatCard label="Loading" value={formatPKR(loading)} sub="Rs 10 / bag sold" tone="amber" />
         <StatCard label="Total Cost" value={formatPKR(totalCost)} sub="all costs" tone="amber" />
         <StatCard
           label="Profit"

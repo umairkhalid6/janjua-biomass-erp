@@ -66,6 +66,7 @@ export const COST_SERIES = [
   { key: "labor", label: "Contractor" },
   { key: "electricity", label: "Electricity" },
   { key: "expenses", label: "Maintenance / other" },
+  { key: "loading", label: "Loading" },
 ] as const;
 
 export function CostMixChart({ data }: { data: CostMixDatum[] }) {

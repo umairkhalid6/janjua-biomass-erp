@@ -86,7 +86,6 @@ export default async function PnlPage({
   const s = current[0];
   const n = (v: string | number | undefined) => Number(v ?? 0);
   const sales = n(s?.sales_revenue);
-  const loadingCharges = n(s?.loading_charges);
   const profit = n(s?.profit);
   // The P&L table is empty only when the window has no activity at all.
   const hasData = sales !== 0 || n(s?.total_cost) !== 0 || n(s?.bags_produced) !== 0;
@@ -97,6 +96,8 @@ export default async function PnlPage({
     { label: "Labor (Contractor)", value: n(s?.labor_cost) },
     { label: "Expenses", value: n(s?.expenses) },
     { label: "Electricity", value: n(s?.electricity_cost) },
+    // Rs 10/bag loading: billed inside the invoice rate, paid out as a cost.
+    { label: "Loading", value: n(s?.loading_charges) },
   ];
 
   const historyData = history.map((r) => ({
@@ -135,17 +136,6 @@ export default async function PnlPage({
               </td>
               <td className="px-4 py-3 text-right font-semibold text-blue-700 dark:text-blue-400">
                 {formatPKR(sales)}
-              </td>
-            </tr>
-            <tr>
-              <td className="px-4 py-2.5 pl-8 text-neutral-600 dark:text-neutral-400">
-                Loading charges collected
-                <span className="ml-2 text-xs font-normal text-neutral-400">
-                  pass-through, not in profit
-                </span>
-              </td>
-              <td className="px-4 py-2.5 text-right text-neutral-700 dark:text-neutral-300">
-                {formatPKR(loadingCharges)}
               </td>
             </tr>
             {costLines.map((c) => (
