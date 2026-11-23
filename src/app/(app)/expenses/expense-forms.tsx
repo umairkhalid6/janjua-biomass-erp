@@ -5,6 +5,8 @@ import { useFormStatus } from "react-dom";
 import { createExpense, updateExpense, type ActionState } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
+import { binderCategory } from "@/lib/constants";
+import { formatPKR } from "@/lib/format";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -28,6 +30,7 @@ type ExpenseRow = {
   item: string;
   amount: number;
   category: string;
+  quantityKg: number | null;
 };
 
 function ExpenseFields({
@@ -37,6 +40,17 @@ function ExpenseFields({
   existing?: ExpenseRow;
   categories: string[];
 }) {
+  const [category, setCategory] = useState(existing?.category ?? "");
+  const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
+  const [kg, setKg] = useState(
+    existing?.quantityKg != null ? String(existing.quantityKg) : "",
+  );
+  // The kg field exists only for Sheera / Lime; for any other category it is
+  // not rendered, so no weight is posted.
+  const binder = binderCategory(category);
+  const ratePerKg =
+    binder && Number(kg) > 0 && Number(amount) > 0 ? Number(amount) / Number(kg) : null;
+
   return (
     <>
       {existing && <input type="hidden" name="id" value={existing.id} />}
@@ -75,7 +89,8 @@ function ExpenseFields({
           min="0.01"
           placeholder="0.00"
           required
-          defaultValue={existing?.amount ?? ""}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
           className={input}
         />
       </div>
@@ -89,9 +104,33 @@ function ExpenseFields({
           allowCustom
           placeholder="Search or add category…"
           defaultValue={existing?.category}
+          onChange={setCategory}
           options={categories.map((c) => ({ value: c, label: c }))}
         />
       </div>
+      {binder && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            Weight (kg)
+          </label>
+          <input
+            name="quantityKg"
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="0"
+            required
+            value={kg}
+            onChange={(e) => setKg(e.target.value)}
+            className={input}
+          />
+          {ratePerKg !== null && (
+            <p className="mt-1 text-xs text-neutral-500">
+              {formatPKR(ratePerKg)} / kg
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
 }

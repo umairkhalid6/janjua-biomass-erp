@@ -24,6 +24,7 @@ import {
 } from "@/components/table-filters";
 import { CreateExpenseForm, EditExpenseForm } from "./expense-forms";
 import { deleteExpense } from "./actions";
+import { BINDER_CATEGORIES } from "@/lib/constants";
 
 export default async function ExpensesPage({
   searchParams,
@@ -73,6 +74,7 @@ export default async function ExpensesPage({
     item: e.item,
     amount: e.amount.toNumber(),
     category: e.category,
+    quantityKg: e.quantityKg?.toNumber() ?? null,
   }));
 
   const filtered = rows.filter(
@@ -83,7 +85,11 @@ export default async function ExpensesPage({
       (maxAmount === null || r.amount <= maxAmount)
   );
 
-  const categories = allCategories.map((c) => c.category);
+  // Binder categories are always offered, even before their first entry, so
+  // the kg field can be reached from the dropdown.
+  const categories = Array.from(
+    new Set([...allCategories.map((c) => c.category), ...BINDER_CATEGORIES]),
+  ).sort((a, b) => a.localeCompare(b));
   // Total covers every filtered row, not just the visible page.
   const totalAmount = filtered.reduce((s, r) => s + r.amount, 0);
 
@@ -172,6 +178,12 @@ export default async function ExpensesPage({
                   </td>
                   <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-50">
                     {row.item}
+                    {row.quantityKg != null && (
+                      <div className="mt-0.5 text-xs font-normal text-neutral-500">
+                        {row.quantityKg.toLocaleString()} kg ·{" "}
+                        {formatPKR(row.amount / row.quantityKg)} / kg
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">

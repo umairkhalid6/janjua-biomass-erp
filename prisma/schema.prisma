@@ -196,6 +196,9 @@ model Expense {
   item      String
   amount    Decimal  @db.Decimal(14, 2)
   category  String   @default("Maintenance")
+  // Weight bought, recorded only for binder categories (Sheera, Lime); null
+  // for every other expense. See BINDER_CATEGORIES in src/lib/constants.ts.
+  quantityKg Decimal? @db.Decimal(12, 2)
   createdAt DateTime @default(now())
 
   @@index([date])

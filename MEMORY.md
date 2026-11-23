@@ -652,3 +652,9 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
   adds Loading to the cost table and cost-mix chart (new pink series color) and top-customer revenue
   is gross; Dashboard gets a Loading stat card. Storage split (`ratePerBag` + `loadingChargePerBag`)
   is untouched, so invoices and customer ledgers are unaffected.
+
+### Binder weight on expenses (2026-11-23)
+- `expenses.quantityKg` (nullable) records kg bought, only for categories **Sheera** and **Lime** (`BINDER_CATEGORIES` / `binderCategory()` in `src/lib/constants.ts`, case-insensitive, saved in canonical casing).
+- The kg field renders in the expense form only when one of those categories is selected, and is required then; the server action stores null for any other category.
+- Sheera and Lime are always offered in the category dropdown; the list shows kg and Rs/kg under the item.
+- Old binder entries (free-text "sheera"/"lime" items under Maintenance) were NOT re-tagged; kg tracking starts from new entries.
