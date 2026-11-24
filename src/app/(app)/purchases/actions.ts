@@ -9,6 +9,18 @@ import type { MaterialType } from "@prisma/client";
 
 export type ActionState = { error?: string; ok?: string };
 
+// Optional moisture % reading. Empty means not measured (null).
+function parseMoisture(
+  v: FormDataEntryValue | null
+): { moisturePct: number | null } | { error: string } {
+  const s = String(v ?? "").trim();
+  if (!s) return { moisturePct: null };
+  const n = parseFloat(s);
+  if (isNaN(n) || n < 0 || n >= 100)
+    return { error: "Moisture must be between 0 and 100%." };
+  return { moisturePct: n };
+}
+
 function parseMaterial(v: FormDataEntryValue | null): MaterialType {
   const valid: MaterialType[] = [
     "POPLAR",
@@ -33,6 +45,9 @@ export async function createPurchase(
   const materialCostStr = String(formData.get("materialCost") ?? "").trim();
   const handlingCostStr = String(formData.get("handlingCost") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const moisture = parseMoisture(formData.get("moisturePct"));
+  if ("error" in moisture) return moisture;
+  const { moisturePct } = moisture;
   const paymentStatus = String(formData.get("paymentStatus") ?? "PAID").trim();
   const amountPaidStr = String(formData.get("amountPaid") ?? "").trim();
   const paymentMethod = String(formData.get("paymentMethod") ?? "Cash").trim();
@@ -82,6 +97,7 @@ export async function createPurchase(
         materialCost,
         handlingCost,
         ratePerKg,
+        moisturePct,
         notes: notes || null,
       },
     });
@@ -121,6 +137,9 @@ export async function updatePurchase(
   const materialCostStr = String(formData.get("materialCost") ?? "").trim();
   const handlingCostStr = String(formData.get("handlingCost") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const moisture = parseMoisture(formData.get("moisturePct"));
+  if ("error" in moisture) return moisture;
+  const { moisturePct } = moisture;
   const paymentStatus = String(formData.get("paymentStatus") ?? "").trim();
   const amountPaidStr = String(formData.get("amountPaid") ?? "").trim();
   const paymentMethod =
@@ -184,6 +203,7 @@ export async function updatePurchase(
         materialCost,
         handlingCost,
         ratePerKg,
+        moisturePct,
         notes: notes || null,
       },
     });

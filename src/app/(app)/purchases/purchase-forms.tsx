@@ -34,6 +34,7 @@ type PurchaseRow = {
   weightKg: number;
   materialCost: number;
   handlingCost: number;
+  moisturePct: number | null;
   notes: string | null;
   // Payments linked to this purchase — what the edit form's Payment Status
   // controls. The badge on the table is FIFO-derived across the supplier's
@@ -338,6 +339,24 @@ function PurchaseForm({
         />
         <p className="mt-1 text-[11px] text-neutral-400">
           Your own unloading/gari expense — not payable to the supplier.
+        </p>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Moisture % (optional)
+        </label>
+        <input
+          name="moisturePct"
+          type="number"
+          step="0.1"
+          min="0"
+          max="99.9"
+          placeholder="e.g. 35"
+          defaultValue={existing?.moisturePct ?? ""}
+          className={input}
+        />
+        <p className="mt-1 text-[11px] text-neutral-400">
+          Meter reading at the gate — leave empty if not measured.
         </p>
       </div>
       <div>

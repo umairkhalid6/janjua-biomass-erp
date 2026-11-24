@@ -85,6 +85,9 @@ model MaterialPurchase {
   materialCost Decimal      @db.Decimal(14, 2)
   handlingCost Decimal      @default(0) @db.Decimal(14, 2) // unloading / gari expense
   ratePerKg    Decimal      @default(0) @db.Decimal(12, 2) // (materialCost + handlingCost) / weightKg
+  // Moisture % (wet basis) measured at the gate; optional, for dry-weight
+  // cost analytics. Null when not measured.
+  moisturePct  Decimal?     @db.Decimal(5, 2)
   notes        String?
   createdAt    DateTime     @default(now())
   payments     SupplierPayment[]

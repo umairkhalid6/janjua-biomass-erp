@@ -133,6 +133,7 @@ export default async function PurchasesPage({
       handlingCost: handCost,
       total,
       ratePerKg,
+      moisturePct: p.moisturePct?.toNumber() ?? null,
       notes: p.notes,
       paymentStatus,
       paidAtEntry,
@@ -276,6 +277,11 @@ export default async function PurchasesPage({
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {row.weightKg.toFixed(2)}
+                    {row.moisturePct != null && (
+                      <div className="text-xs text-neutral-500">
+                        {row.moisturePct}% moisture
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {formatPKR(row.materialCost)}
@@ -318,6 +324,7 @@ export default async function PurchasesPage({
                             weightKg: row.weightKg,
                             materialCost: row.materialCost,
                             handlingCost: row.handlingCost,
+                            moisturePct: row.moisturePct,
                             notes: row.notes,
                             paidAtEntry: row.paidAtEntry,
                             paymentMethod: row.paymentMethod,

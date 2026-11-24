@@ -658,3 +658,7 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 - The kg field renders in the expense form only when one of those categories is selected, and is required then; the server action stores null for any other category.
 - Sheera and Lime are always offered in the category dropdown; the list shows kg and Rs/kg under the item.
 - Old binder entries (free-text "sheera"/"lime" items under Maintenance) were NOT re-tagged; kg tracking starts from new entries.
+
+### Moisture % on raw material purchases (2026-11-24)
+- `material_purchases.moisturePct` (Decimal(5,2), nullable): gate moisture-meter reading, wet basis. Optional — empty = not measured; validated 0 ≤ x < 100.
+- Shown under Weight in the purchases list. Not yet used in any report; intended for dry-weight cost per supplier (dry kg = weightKg × (1 − moisture/100)).
