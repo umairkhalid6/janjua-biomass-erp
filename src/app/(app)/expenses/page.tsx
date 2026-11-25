@@ -24,7 +24,7 @@ import {
 } from "@/components/table-filters";
 import { CreateExpenseForm, EditExpenseForm } from "./expense-forms";
 import { deleteExpense } from "./actions";
-import { BINDER_CATEGORIES } from "@/lib/constants";
+import { BINDER_CATEGORIES, TORA_CATEGORY } from "@/lib/constants";
 
 export default async function ExpensesPage({
   searchParams,
@@ -75,6 +75,7 @@ export default async function ExpensesPage({
     amount: e.amount.toNumber(),
     category: e.category,
     quantityKg: e.quantityKg?.toNumber() ?? null,
+    toraBags: e.toraBags,
   }));
 
   const filtered = rows.filter(
@@ -85,10 +86,14 @@ export default async function ExpensesPage({
       (maxAmount === null || r.amount <= maxAmount)
   );
 
-  // Binder categories are always offered, even before their first entry, so
-  // the kg field can be reached from the dropdown.
+  // Binder categories and Tora are always offered, even before their first
+  // entry, so the kg / bag-count field can be reached from the dropdown.
   const categories = Array.from(
-    new Set([...allCategories.map((c) => c.category), ...BINDER_CATEGORIES]),
+    new Set([
+      ...allCategories.map((c) => c.category),
+      ...BINDER_CATEGORIES,
+      TORA_CATEGORY,
+    ]),
   ).sort((a, b) => a.localeCompare(b));
   // Total covers every filtered row, not just the visible page.
   const totalAmount = filtered.reduce((s, r) => s + r.amount, 0);
@@ -182,6 +187,12 @@ export default async function ExpensesPage({
                       <div className="mt-0.5 text-xs font-normal text-neutral-500">
                         {row.quantityKg.toLocaleString()} kg ·{" "}
                         {formatPKR(row.amount / row.quantityKg)} / kg
+                      </div>
+                    )}
+                    {row.toraBags != null && (
+                      <div className="mt-0.5 text-xs font-normal text-neutral-500">
+                        {row.toraBags.toLocaleString()} bags ·{" "}
+                        {formatPKR(row.amount / row.toraBags)} / bag
                       </div>
                     )}
                   </td>

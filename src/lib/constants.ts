@@ -27,3 +27,11 @@ export function binderCategory(category: string): string | null {
   const c = category.trim().toLowerCase();
   return BINDER_CATEGORIES.find((b) => b.toLowerCase() === c) ?? null;
 }
+
+// Expense category for tora (empty bags) purchases. Its expenses must record
+// how many bags were bought (toraBags); matched case-insensitively.
+export const TORA_CATEGORY = "Tora";
+
+export function isToraCategory(category: string): boolean {
+  return category.trim().toLowerCase() === TORA_CATEGORY.toLowerCase();
+}

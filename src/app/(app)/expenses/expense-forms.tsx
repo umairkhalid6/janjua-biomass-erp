@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { createExpense, updateExpense, type ActionState } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
-import { binderCategory } from "@/lib/constants";
+import { binderCategory, isToraCategory } from "@/lib/constants";
 import { formatPKR } from "@/lib/format";
 
 const input =
@@ -31,6 +31,7 @@ type ExpenseRow = {
   amount: number;
   category: string;
   quantityKg: number | null;
+  toraBags: number | null;
 };
 
 function ExpenseFields({
@@ -48,6 +49,13 @@ function ExpenseFields({
   // The kg field exists only for Sheera / Lime Powder; for any other category it is
   // not rendered, so no weight is posted.
   const binder = binderCategory(category);
+  // Likewise the bag-count field exists only for Tora.
+  const tora = isToraCategory(category);
+  const [bags, setBags] = useState(
+    existing?.toraBags != null ? String(existing.toraBags) : "",
+  );
+  const ratePerBag =
+    tora && Number(bags) > 0 && Number(amount) > 0 ? Number(amount) / Number(bags) : null;
   const ratePerKg =
     binder && Number(kg) > 0 && Number(amount) > 0 ? Number(amount) / Number(kg) : null;
 
@@ -127,6 +135,29 @@ function ExpenseFields({
           {ratePerKg !== null && (
             <p className="mt-1 text-xs text-neutral-500">
               {formatPKR(ratePerKg)} / kg
+            </p>
+          )}
+        </div>
+      )}
+      {tora && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            Number of Tora (bags)
+          </label>
+          <input
+            name="toraBags"
+            type="number"
+            step="1"
+            min="1"
+            placeholder="0"
+            required
+            value={bags}
+            onChange={(e) => setBags(e.target.value)}
+            className={input}
+          />
+          {ratePerBag !== null && (
+            <p className="mt-1 text-xs text-neutral-500">
+              {formatPKR(ratePerBag)} / bag
             </p>
           )}
         </div>

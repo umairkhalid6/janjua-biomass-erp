@@ -662,3 +662,8 @@ and Next 16 builds with Turbopack, so it silently generated nothing (see ERRORS.
 ### Moisture % on raw material purchases (2026-11-24)
 - `material_purchases.moisturePct` (Decimal(5,2), nullable): gate moisture-meter reading, wet basis. Optional — empty = not measured; validated 0 ≤ x < 100.
 - Shown under Weight in the purchases list. Not yet used in any report; intended for dry-weight cost per supplier (dry kg = weightKg × (1 − moisture/100)).
+
+### Tora bag count on expenses (2026-11-25)
+- `expenses.toraBags` (nullable Int) records how many tora (empty bags) were bought, only for category **Tora** (`TORA_CATEGORY` / `isToraCategory()` in `src/lib/constants.ts`, case-insensitive, saved as "Tora").
+- The "Number of Tora (bags)" field renders only when Tora is selected and is required then (whole number ≥ 1); the server action stores null for other categories. Tora is always offered in the category dropdown; the list shows bags and Rs/bag under the item.
+- Migration `20261125130000_expense_tora_bags`. Old Tora entries (if any) have no bag count until edited — editing one now requires entering it.
