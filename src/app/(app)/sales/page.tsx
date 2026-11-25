@@ -105,6 +105,7 @@ export default async function SalesPage({
       customerCompany: s.customer.company,
       customerPhone: s.customer.phone,
       quantityBags,
+      bagKg: s.bagKg,
       ratePerBag,
       grossRatePerBag: ratePerBag + loadingChargePerBag,
       loadingAmount: quantityBags * loadingChargePerBag,
@@ -141,6 +142,7 @@ export default async function SalesPage({
   // the very figures the row masking hides.
   const moneyRows = isAdmin ? filtered : filtered.filter((r) => r.mine);
   const totalBags = filtered.reduce((s, r) => s + r.quantityBags, 0);
+  const totalKg = filtered.reduce((s, r) => s + r.quantityBags * r.bagKg, 0);
   const totalLoading = moneyRows.reduce((s, r) => s + r.loadingAmount, 0);
   const totalAmount = moneyRows.reduce((s, r) => s + r.amount, 0);
 
@@ -274,6 +276,9 @@ export default async function SalesPage({
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {row.quantityBags.toFixed(2)}
+                    <span className="block text-[11px] text-neutral-400">
+                      × {row.bagKg} kg = {(row.quantityBags * row.bagKg).toLocaleString()} kg
+                    </span>
                   </td>
                   {/* Money columns: admins always, operators only on their own
                       entries. Others' rows stay at invoice / date / customer /
@@ -310,6 +315,7 @@ export default async function SalesPage({
                               date: row.date,
                               customerId: row.customerId,
                               quantityBags: row.quantityBags,
+                              bagKg: row.bagKg,
                               ratePerBag: row.grossRatePerBag,
                               notes: row.notes,
                             }}
@@ -334,6 +340,9 @@ export default async function SalesPage({
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-900 dark:text-neutral-50">
                     {totalBags.toFixed(2)} bags
+                    <span className="block text-xs font-normal text-neutral-500">
+                      {totalKg.toLocaleString()} kg
+                    </span>
                   </td>
                   <td />
                   <td className="px-4 py-3 text-right text-neutral-600 dark:text-neutral-400">

@@ -108,6 +108,7 @@ export default async function InvoicePage({
           phone: sale.customer.phone,
         }}
         quantityBags={quantityBags}
+        bagKg={sale.bagKg}
         ratePerBag={ratePerBag}
         notes={sale.notes}
         previousBalance={previousBalance}

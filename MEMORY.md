@@ -19,7 +19,7 @@ Update it as significant decisions are made.
 
 ### Units & Currency
 - **Amounts in PKR** (Pakistani Rupee). No multi-currency support planned.
-- **Production and sales measured in 40-kg bags** (`BAG_KG = 40`, see `src/lib/constants.ts`). Bag counts are `Decimal(12,2)` (partial bags allowed); weight in KG is derived (`bags × 40`).
+- **Production and sales measured in 40-kg or 50-kg bags** (2026-11-25, `BAG_SIZES` in `src/lib/constants.ts`; `BAG_KG = 40` is only the default). The size is stored per shift (`production_days.dayBagKg` / `nightBagKg`) and per sale (`pellet_sales.bagKg`), CHECK-constrained to 40/50. All rows entered before this are treated as 40 kg (column default backfill). New entries must choose a size: the picker has no pre-selection (required radio) and the server actions reject a missing size; editing an already-entered shift/sale pre-selects its stored size. Weight = bags × that row's size — never bags × 40. Labor (`v_labor_daily`, also exposes `day_kg`/`night_kg`/`kg`), `v_production_summary.total_kg`, electricity cost/kg, production report KG, overview KPIs and the invoice all use stored sizes. Sale price and the Rs 10 loading charge stay **per bag**. Bag-count totals still add 40s and 50s together; use kg for comparable volume.
 - **Raw material purchases measured in KG** (biomass feedstock bought by weight).
 
 ### Tech Stack
@@ -70,8 +70,8 @@ Update it as significant decisions are made.
 
 | Term | Meaning |
 |------|---------|
-| Bag | 40-kg pellet bag (unit of production/sale) |
-| BAG_KG | 40 (constant — kg per bag) |
+| Bag | 40-kg or 50-kg pellet bag (unit of production/sale) |
+| BAG_KG | 40 (default bag size; real size is stored per shift / per sale) |
 | Feedstock | Raw biomass material purchased in KG |
 | Run | A production run (date, bags produced, feedstock consumed) |
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
+import { parseBagSize } from "@/lib/constants";
 
 export type ActionState = { error?: string; ok?: string };
 
@@ -20,6 +21,8 @@ export async function upsertProductionDay(
 
   if (!dateStr) return { error: "Date is required." };
   if (bagsStr === "") return { error: "Bag count is required." };
+  const bagKg = parseBagSize(formData.get("bagKg"));
+  if (!bagKg) return { error: "Select a bag size (40 kg or 50 kg)." };
 
   const bags = parseFloat(bagsStr);
   if (isNaN(bags) || bags < 0)
@@ -27,7 +30,9 @@ export async function upsertProductionDay(
 
   const date = parseDateInput(dateStr);
   const shiftField =
-    shift === "DAY" ? { dayShiftBags: bags } : { nightShiftBags: bags };
+    shift === "DAY"
+      ? { dayShiftBags: bags, dayBagKg: bagKg }
+      : { nightShiftBags: bags, nightBagKg: bagKg };
 
   // One row per date, but day and night shifts are independent entries. Each
   // shift keeps its own audit trail: the first save for a shift records its
@@ -54,8 +59,7 @@ export async function upsertProductionDay(
     await prisma.productionDay.create({
       data: {
         date,
-        dayShiftBags: shift === "DAY" ? bags : 0,
-        nightShiftBags: shift === "NIGHT" ? bags : 0,
+        ...shiftField,
         notes: notes || null,
         createdById: user.id,
         ...shiftAudit,
@@ -75,7 +79,7 @@ export async function upsertProductionDay(
 
   revalidatePath("/production");
   return {
-    ok: `${shift === "DAY" ? "Day" : "Night"} shift saved.`,
+    ok: `${shift === "DAY" ? "Day" : "Night"} shift saved (${bags} × ${bagKg} kg = ${(bags * bagKg).toLocaleString()} kg).`,
   };
 }
 

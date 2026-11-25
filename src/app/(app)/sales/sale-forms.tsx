@@ -7,6 +7,7 @@ import { createCustomer } from "@/app/(app)/customers/actions";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { LOADING_CHARGE_PER_BAG } from "@/lib/constants";
+import { BagSizeToggle, KgHint } from "@/app/(app)/production/production-forms";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -31,6 +32,7 @@ type SaleRow = {
   date: string;
   customerId: string;
   quantityBags: number;
+  bagKg: number;
   // Customer-facing rate (net ratePerBag + loading charge) — what the user
   // originally typed; the server re-splits it on save.
   ratePerBag: number;
@@ -190,6 +192,8 @@ export function CreateSaleForm({
   const [state, action] = useActionState<ActionState, FormData>(createSale, {});
   const [localCustomers, setLocalCustomers] = useState(customers);
   const [customerId, setCustomerId] = useState("");
+  const [bagKg, setBagKg] = useState("");
+  const [bags, setBags] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
   // After a successful save, clear the form for the next entry but keep the
@@ -197,6 +201,8 @@ export function CreateSaleForm({
   useEffect(() => {
     if (!state.ok) return;
     setCustomerId("");
+    setBagKg("");
+    setBags("");
     const form = formRef.current;
     if (!form) return;
     form.reset();
@@ -246,6 +252,12 @@ export function CreateSaleForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Bag size
+        </label>
+        <BagSizeToggle value={bagKg} onChange={setBagKg} />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Quantity (bags)
         </label>
         <input
@@ -255,8 +267,11 @@ export function CreateSaleForm({
           min="0.5"
           placeholder="0"
           required
+          value={bags}
+          onChange={(e) => setBags(e.target.value)}
           className={input}
         />
+        <KgHint bags={bags} bagKg={bagKg} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
@@ -333,6 +348,8 @@ export function EditSaleForm({
   customers: CustomerOption[];
 }) {
   const [state, action] = useActionState<ActionState, FormData>(updateSale, {});
+  const [bagKg, setBagKg] = useState(String(existing.bagKg));
+  const [bags, setBags] = useState(String(existing.quantityBags));
 
   return (
     <form
@@ -370,6 +387,12 @@ export function EditSaleForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Bag size
+        </label>
+        <BagSizeToggle value={bagKg} onChange={setBagKg} />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Quantity (bags)
         </label>
         <input
@@ -378,9 +401,11 @@ export function EditSaleForm({
           step="0.5"
           min="0.5"
           required
-          defaultValue={existing.quantityBags}
+          value={bags}
+          onChange={(e) => setBags(e.target.value)}
           className={input}
         />
+        <KgHint bags={bags} bagKg={bagKg} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">

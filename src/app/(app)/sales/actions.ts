@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireAdmin } from "@/lib/auth-helpers";
 import { parseDateInput } from "@/lib/format";
-import { LOADING_CHARGE_PER_BAG } from "@/lib/constants";
+import { LOADING_CHARGE_PER_BAG, parseBagSize } from "@/lib/constants";
 
 export type ActionState = { error?: string; ok?: string };
 
@@ -36,6 +36,8 @@ export async function createSale(
   if (!dateStr) return { error: "Date is required." };
   if (!customerId) return { error: "Customer is required." };
   if (!quantityStr || !rateStr) return { error: "Quantity and rate are required." };
+  const bagKg = parseBagSize(formData.get("bagKg"));
+  if (!bagKg) return { error: "Select a bag size (40 kg or 50 kg)." };
 
   const quantityBags = parseFloat(quantityStr);
   const enteredRate = parseFloat(rateStr);
@@ -61,6 +63,7 @@ export async function createSale(
         date,
         customerId,
         quantityBags,
+        bagKg,
         ...splitRate(enteredRate),
         notes: notes || null,
         createdById: user.id,
@@ -109,6 +112,8 @@ export async function updateSale(
   if (!dateStr) return { error: "Date is required." };
   if (!customerId) return { error: "Customer is required." };
   if (!quantityStr || !rateStr) return { error: "Quantity and rate are required." };
+  const bagKg = parseBagSize(formData.get("bagKg"));
+  if (!bagKg) return { error: "Select a bag size (40 kg or 50 kg)." };
 
   const quantityBags = parseFloat(quantityStr);
   const enteredRate = parseFloat(rateStr);
@@ -141,6 +146,7 @@ export async function updateSale(
         date,
         customerId,
         quantityBags,
+        bagKg,
         ...splitRate(enteredRate),
         notes: notes || null,
       },

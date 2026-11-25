@@ -84,6 +84,7 @@ export default async function CustomerDetailPage({
         date: toDateInputValue(s.date),
         customerId: s.customerId,
         quantityBags: Number(s.quantityBags),
+        bagKg: s.bagKg,
         // EditSaleForm expects the customer-facing rate; the server re-splits
         // off the loading charge on save.
         ratePerBag: Number(s.ratePerBag) + Number(s.loadingChargePerBag),

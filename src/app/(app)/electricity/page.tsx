@@ -6,7 +6,6 @@ import {
   formatMonth,
   formatPKR,
 } from "@/lib/format";
-import { BAG_KG } from "@/lib/constants";
 import { DeleteButton } from "@/components/delete-button";
 import { EditDialog } from "@/components/edit-dialog";
 import { UpsertElectricityForm } from "./electricity-forms";
@@ -49,19 +48,27 @@ export default async function ElectricityPage() {
             lte: new Date(Math.max(...ranges.map((r) => r.lte.getTime()))),
           },
         },
-        select: { date: true, dayShiftBags: true, nightShiftBags: true },
+        select: {
+          date: true,
+          dayShiftBags: true,
+          nightShiftBags: true,
+          dayBagKg: true,
+          nightBagKg: true,
+        },
       })
     : [];
 
   const rows = bills.map((b, i) => {
     const range = ranges[i];
-    const bags = productionDays
+    const productionKg = productionDays
       .filter((d) => d.date >= range.gte && d.date <= range.lte)
       .reduce(
-        (sum, d) => sum + d.dayShiftBags.toNumber() + d.nightShiftBags.toNumber(),
+        (sum, d) =>
+          sum +
+          d.dayShiftBags.toNumber() * d.dayBagKg +
+          d.nightShiftBags.toNumber() * d.nightBagKg,
         0
       );
-    const productionKg = bags * BAG_KG;
     const billAmount = b.billAmount.toNumber();
     return {
       id: b.id,

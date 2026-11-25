@@ -79,6 +79,8 @@ export default async function ProductionPage({
     date: toDateInputValue(r.date),
     dayShiftBags: r.dayShiftBags.toNumber(),
     nightShiftBags: r.nightShiftBags.toNumber(),
+    dayBagKg: r.dayBagKg,
+    nightBagKg: r.nightBagKg,
     notes: r.notes,
     // Every user id touching this row, for the "entered by" filter.
     auditIds: [
@@ -113,6 +115,9 @@ export default async function ProductionPage({
   const totalDay = filtered.reduce((s, r) => s + r.dayShiftBags, 0);
   const totalNight = filtered.reduce((s, r) => s + r.nightShiftBags, 0);
   const totalBags = totalDay + totalNight;
+  const kgOf = (r: (typeof filtered)[number]) =>
+    r.dayShiftBags * r.dayBagKg + r.nightShiftBags * r.nightBagKg;
+  const totalKg = filtered.reduce((s, r) => s + kgOf(r), 0);
 
   const { page, pageCount, total, pageRows } = paginate(filtered, sp.page);
 
@@ -172,6 +177,7 @@ export default async function ProductionPage({
                 <th className="px-4 py-3 font-medium text-right">Day Bags</th>
                 <th className="px-4 py-3 font-medium text-right">Night Bags</th>
                 <th className="px-4 py-3 font-medium text-right">Total</th>
+                <th className="px-4 py-3 font-medium text-right">KG</th>
                 <th className="px-4 py-3 font-medium">Notes</th>
                 <th className="px-4 py-3 font-medium">Entered By</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
@@ -181,7 +187,7 @@ export default async function ProductionPage({
               {pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8 text-center text-sm text-neutral-400"
                   >
                     {hasFilters
@@ -197,12 +203,21 @@ export default async function ProductionPage({
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {row.dayShiftBags.toFixed(2)}
+                    {row.dayShiftBags > 0 && (
+                      <span className="block text-[11px] text-neutral-400">{row.dayBagKg} kg bags</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
                     {row.nightShiftBags.toFixed(2)}
+                    {row.nightShiftBags > 0 && (
+                      <span className="block text-[11px] text-neutral-400">{row.nightBagKg} kg bags</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-neutral-900 dark:text-neutral-50">
                     {(row.dayShiftBags + row.nightShiftBags).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
+                    {kgOf(row).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-neutral-500 text-xs">
                     {row.notes ?? ""}
@@ -244,6 +259,9 @@ export default async function ProductionPage({
                   </td>
                   <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
                     {totalBags.toFixed(2)} bags
+                  </td>
+                  <td className="px-4 py-3 text-right text-green-700 dark:text-green-400">
+                    {totalKg.toLocaleString()} kg
                   </td>
                   <td colSpan={3} />
                 </tr>

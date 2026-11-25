@@ -1,7 +1,15 @@
-// One pellet bag weighs 40 kg. Production and sales are recorded in bags;
-// material purchases are recorded in KG. Keep in sync with the SQL views
-// (prisma/migrations/*_report_views), which hardcode 40.
+// Pellets are packed in 40-kg or 50-kg bags. Production (per shift) and sales
+// (per sale) record which size was used; weight = bags × that size. BAG_KG is
+// the default size, used for rows entered before the size was recorded.
 export const BAG_KG = 40;
+export const BAG_SIZES = [40, 50] as const;
+export type BagSize = (typeof BAG_SIZES)[number];
+
+// Parses a submitted bag size; anything other than an allowed size is null.
+export function parseBagSize(value: unknown): BagSize | null {
+  const n = Number(String(value ?? "").trim());
+  return (BAG_SIZES as readonly number[]).includes(n) ? (n as BagSize) : null;
+}
 
 export const CURRENCY = "PKR";
 

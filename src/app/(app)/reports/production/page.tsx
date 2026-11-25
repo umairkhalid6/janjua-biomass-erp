@@ -10,7 +10,6 @@ import {
   periodLabel,
   periodRange,
 } from "@/lib/format";
-import { BAG_KG } from "@/lib/constants";
 import {
   defaultGrainBuckets,
   grainUnit,
@@ -26,6 +25,7 @@ type DailyRow = {
   date: Date;
   day_bags: string | number;
   night_bags: string | number;
+  kg: string | number;
   labor_cost: string | number;
 };
 type TrendRow = { bucket: Date; total_bags: string | number };
@@ -50,6 +50,7 @@ export default async function ProductionReportPage({
       SELECT p.date,
              p."dayShiftBags"  AS day_bags,
              p."nightShiftBags" AS night_bags,
+             p."dayShiftBags" * p."dayBagKg" + p."nightShiftBags" * p."nightBagKg" AS kg,
              COALESCE(l.labor_cost, 0) AS labor_cost
       FROM production_days p
       LEFT JOIN v_labor_daily l ON l.date = p.date
@@ -75,7 +76,7 @@ export default async function ProductionReportPage({
       dayBags,
       nightBags,
       total,
-      kg: total * BAG_KG,
+      kg: Number(r.kg),
       laborCost: Number(r.labor_cost),
     };
   });

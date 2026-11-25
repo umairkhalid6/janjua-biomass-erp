@@ -9,7 +9,6 @@
 // survive printing but degrade gracefully if a browser strips backgrounds.
 
 import { formatDate, formatPKR } from "@/lib/format";
-import { BAG_KG } from "@/lib/constants";
 import { BrandMark } from "@/components/brand-mark";
 
 export type InvoiceDocumentProps = {
@@ -18,6 +17,8 @@ export type InvoiceDocumentProps = {
   date: string | Date;
   customer: { name: string; company?: string | null; phone?: string | null };
   quantityBags: number;
+  /** Bag size sold (40 or 50 kg). */
+  bagKg: number;
   ratePerBag: number;
   notes?: string | null;
   /**
@@ -37,6 +38,7 @@ export function InvoiceDocument({
   date,
   customer,
   quantityBags,
+  bagKg,
   ratePerBag,
   notes,
   previousBalance = 0,
@@ -44,7 +46,7 @@ export function InvoiceDocument({
   id,
 }: InvoiceDocumentProps) {
   const amount = quantityBags * ratePerBag;
-  const weightKg = quantityBags * BAG_KG;
+  const weightKg = quantityBags * bagKg;
   const totalPayable = amount + previousBalance;
   const balanceDue = totalPayable - amountReceived;
   // Decimal noise guard: treat sub-paisa remainders as settled.
@@ -129,7 +131,7 @@ export function InvoiceDocument({
         <div className="border-b border-neutral-200 px-3 py-4">
           <p className="font-medium text-neutral-900">Biomass Pellets</p>
           <p className="mt-0.5 text-xs text-neutral-500">
-            {quantityBags.toFixed(2)} bags × {BAG_KG} kg/bag ={" "}
+            {quantityBags.toFixed(2)} bags × {bagKg} kg/bag ={" "}
             {weightKg.toFixed(2)} kg
           </p>
           <dl className="mt-3 space-y-1.5 text-sm">
@@ -179,7 +181,7 @@ export function InvoiceDocument({
             <td className="py-4 pl-3 pr-2 align-top">
               <p className="font-medium text-neutral-900">Biomass Pellets</p>
               <p className="mt-0.5 text-xs text-neutral-500">
-                {quantityBags.toFixed(2)} bags × {BAG_KG} kg/bag ={" "}
+                {quantityBags.toFixed(2)} bags × {bagKg} kg/bag ={" "}
                 {weightKg.toFixed(2)} kg
               </p>
             </td>
@@ -277,7 +279,7 @@ export function InvoiceDocument({
           Thank you for your business!
         </p>
         <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">
-          Janjua Biomass Pellets · Pakistan · Pellets supplied in {BAG_KG} kg
+          Janjua Biomass Pellets · Pakistan · Pellets supplied in {bagKg} kg
           bags · Please reference {invoiceLabel} with your payment.
         </p>
       </footer>

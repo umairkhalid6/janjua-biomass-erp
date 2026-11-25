@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { upsertProductionDay, type ActionState } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
+import { BAG_SIZES } from "@/lib/constants";
 
 const input =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50";
@@ -27,8 +28,77 @@ type ProductionDayRow = {
   date: string; // YYYY-MM-DD
   dayShiftBags: number;
   nightShiftBags: number;
+  dayBagKg: number;
+  nightBagKg: number;
   notes: string | null;
 };
+
+// Two-button 40 kg / 50 kg picker; submits as "bagKg". Nothing is pre-selected
+// on a new entry — the user must choose a size (native required radio, and the
+// server rejects a missing size too). Records from before bag sizes existed
+// are stored as 40 kg. Exported for the sale forms so both screens match.
+export function BagSizeToggle({
+  value,
+  onChange,
+  name = "bagKg",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  name?: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label="Bag size" className="grid grid-cols-2 gap-2">
+      {BAG_SIZES.map((size) => {
+        const selected = value === String(size);
+        return (
+          <label
+            key={size}
+            className={
+              "relative cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-semibold transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-green-600 " +
+              (selected
+                ? "border-green-700 bg-green-700 text-white"
+                : "border-neutral-300 bg-white text-neutral-700 hover:border-green-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300")
+            }
+          >
+            <input
+              type="radio"
+              name={name}
+              value={size}
+              required
+              checked={selected}
+              onChange={() => onChange(String(size))}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+            {size} kg
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+// "120 bags × 50 kg = 6,000 kg" under the bag count, once a count is typed.
+export function KgHint({ bags, bagKg }: { bags: string; bagKg: string }) {
+  const n = parseFloat(bags);
+  if (isNaN(n) || n <= 0) return null;
+  if (!bagKg)
+    return (
+      <p className="mt-1 text-[11px] text-amber-600">Select a bag size (40 or 50 kg).</p>
+    );
+  return (
+    <p className="mt-1 text-[11px] text-neutral-500">
+      {n} bags × {bagKg} kg = {(n * Number(bagKg)).toLocaleString()} kg
+    </p>
+  );
+}
+
+// Size to pre-select when editing a shift: its stored size if that shift was
+// already entered, otherwise blank so the user has to choose.
+function storedSize(row: ProductionDayRow, shift: "DAY" | "NIGHT"): string {
+  return shift === "DAY"
+    ? row.dayShiftBags > 0 ? String(row.dayBagKg) : ""
+    : row.nightShiftBags > 0 ? String(row.nightBagKg) : "";
+}
 
 const SHIFT_OPTIONS = [
   { value: "DAY", label: "Day Shift" },
@@ -52,6 +122,9 @@ export function ProductionForm({
   const [bags, setBags] = useState(
     existing ? String(existing.dayShiftBags) : ""
   );
+  const [bagKg, setBagKg] = useState(
+    existing ? storedSize(existing, "DAY") : ""
+  );
   const [formKey, setFormKey] = useState(0);
 
   // After a successful save on the add form, clear everything for the next
@@ -60,6 +133,7 @@ export function ProductionForm({
     if (!state.ok || existing) return;
     setShift("DAY");
     setBags("");
+    setBagKg("");
     setFormKey((k) => k + 1);
   }, [state, existing]);
 
@@ -70,6 +144,7 @@ export function ProductionForm({
       setBags(
         String(s === "DAY" ? existing.dayShiftBags : existing.nightShiftBags)
       );
+      setBagKg(storedSize(existing, s));
     }
   };
 
@@ -101,7 +176,13 @@ export function ProductionForm({
           options={SHIFT_OPTIONS}
         />
       </div>
-      <div className="sm:col-span-2">
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          Bag Size
+        </label>
+        <BagSizeToggle value={bagKg} onChange={setBagKg} />
+      </div>
+      <div>
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">
           Bags Produced
         </label>
@@ -116,6 +197,7 @@ export function ProductionForm({
           onChange={(e) => setBags(e.target.value)}
           className={input}
         />
+        <KgHint bags={bags} bagKg={bagKg} />
       </div>
       <div className="sm:col-span-2">
         <label className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400">

@@ -45,8 +45,8 @@ export default async function SettingsPage() {
           Contractor Rate History
         </h2>
         <p className="mb-3 text-xs text-neutral-500">
-          The two shifts are paid different rates. Labor cost = day bags × {40}{" "}
-          kg/bag × day rate + night bags × {40} kg/bag × night rate, using the
+          The two shifts are paid different rates. Labor cost = day bags × bag
+          size (40 or 50 kg) × day rate + night bags × bag size × night rate, using the
           rates effective on each production date. Add a new entry when a rate
           changes — it applies from its effective date forward and never
           re-prices past production.

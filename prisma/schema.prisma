@@ -1,6 +1,7 @@
 // Janjua Biomass ERP — data model
 // Money is PKR stored as Decimal(14,2). Production and sales are measured in
-// 40-kg bags (BAG_KG = 40, see src/lib/constants.ts); purchases are in KG.
+// bags of 40 or 50 kg (size stored per shift / per sale, see BAG_SIZES in
+// src/lib/constants.ts); purchases are in KG.
 // Report aggregations live in SQL views (see prisma/migrations/*_views).
 
 generator client {
@@ -145,6 +146,8 @@ model PelletSale {
   customerId   String
   customer     Customer @relation(fields: [customerId], references: [id])
   quantityBags Decimal  @db.Decimal(12, 2)
+  // Bag size sold (40 or 50 kg). Weight = quantityBags × bagKg.
+  bagKg        Int      @default(40)
   // Net pellet price per bag. The customer-facing (invoice) rate is
   // ratePerBag + loadingChargePerBag; the split keeps loading income out of
   // pellet revenue in reports (see LOADING_CHARGE_PER_BAG in constants.ts).
@@ -168,6 +171,10 @@ model ProductionDay {
   date           DateTime @unique @db.Date
   dayShiftBags   Decimal  @default(0) @db.Decimal(12, 2)
   nightShiftBags Decimal  @default(0) @db.Decimal(12, 2)
+  // Bag size (40 or 50 kg) each shift packed. Weight = bags × size; labor is
+  // costed on that weight (see v_labor_daily).
+  dayBagKg       Int      @default(40)
+  nightBagKg     Int      @default(40)
   notes          String?
   createdById    String?
   createdBy      User?    @relation("ProductionDayCreatedBy", fields: [createdById], references: [id])

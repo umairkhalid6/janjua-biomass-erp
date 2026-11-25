@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatPKR } from "@/lib/format";
-import { BAG_KG, MATERIAL_LABELS } from "@/lib/constants";
+import { MATERIAL_LABELS } from "@/lib/constants";
 import { CHART } from "@/components/charts/palette";
 import {
   CostMixChart,
@@ -37,7 +37,7 @@ const monthLabel = (d: Date) =>
 export default async function OverviewPage() {
   await requireAdmin();
 
-  const [summary, daily, expenseItems, materials, contractorPayments, bills, topCustomers, topSuppliers] =
+  const [summary, daily, expenseItems, materials, contractorPayments, bills, topCustomers, topSuppliers, kgTotals] =
     await Promise.all([
       prisma.$queryRaw<SummaryRow[]>`
         SELECT * FROM v_monthly_summary ORDER BY month ASC
@@ -83,7 +83,15 @@ export default async function OverviewPage() {
         FROM material_purchases m JOIN suppliers sp ON sp.id = m."supplierId"
         GROUP BY sp.name ORDER BY 3 DESC LIMIT 10
       `,
+      // Bags come in 40 or 50 kg, so weight is summed per row, not bags × 40.
+      prisma.$queryRaw<{ produced_kg: string | number | null; sold_kg: string | number | null }[]>`
+        SELECT
+          (SELECT SUM("dayShiftBags" * "dayBagKg" + "nightShiftBags" * "nightBagKg") FROM production_days) AS produced_kg,
+          (SELECT SUM("quantityBags" * "bagKg") FROM pellet_sales) AS sold_kg
+      `,
     ]);
+  const producedKg = Number(kgTotals[0]?.produced_kg ?? 0);
+  const soldKg = Number(kgTotals[0]?.sold_kg ?? 0);
 
   const months = summary.map((s) => {
     const produced = n(s.bags_produced);
@@ -190,13 +198,13 @@ export default async function OverviewPage() {
         <Kpi
           label="Bags Sold"
           value={totals.bagsSold.toLocaleString()}
-          sub="bags (40 kg)"
+          sub={`bags · ${soldKg.toLocaleString()} kg`}
           tone="blue"
         />
         <Kpi
           label="Bags Produced"
           value={totals.produced.toLocaleString()}
-          sub="bags (40 kg)"
+          sub={`bags · ${producedKg.toLocaleString()} kg`}
           tone="slate"
         />
       </section>
@@ -421,7 +429,7 @@ export default async function OverviewPage() {
             </table>
           </div>
           <p className="border-t border-neutral-200 px-4 py-2.5 text-xs text-neutral-500 dark:border-neutral-800">
-            Earned = bags × {BAG_KG} kg × rate per kg. Positive difference means still owed to the contractor.
+            Earned = bags × bag size (40 or 50 kg) × rate per kg. Positive difference means still owed to the contractor.
           </p>
         </Card>
 
