@@ -45,7 +45,7 @@ function ExpenseFields({
   const [kg, setKg] = useState(
     existing?.quantityKg != null ? String(existing.quantityKg) : "",
   );
-  // The kg field exists only for Sheera / Lime; for any other category it is
+  // The kg field exists only for Sheera / Lime Powder; for any other category it is
   // not rendered, so no weight is posted.
   const binder = binderCategory(category);
   const ratePerKg =

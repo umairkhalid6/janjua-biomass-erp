@@ -8,7 +8,7 @@ import { binderCategory } from "@/lib/constants";
 
 export type ActionState = { error?: string; ok?: string };
 
-// Binder categories (Sheera, Lime) must carry the weight bought; every other
+// Binder categories (Sheera, Lime Powder) must carry the weight bought; every other
 // category stores null even if a stale kg value was posted.
 function parseCategoryAndKg(
   formData: FormData,

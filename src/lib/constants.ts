@@ -19,9 +19,9 @@ export const MATERIAL_LABELS: Record<string, string> = {
 
 // Expense categories that record the weight bought (quantityKg). The kg field
 // is shown and required only for these; matched case-insensitively.
-export const BINDER_CATEGORIES = ["Sheera", "Lime"] as const;
+export const BINDER_CATEGORIES = ["Sheera", "Lime Powder"] as const;
 
-// Returns the canonical binder category name ("Sheera" / "Lime") for any
+// Returns the canonical binder category name ("Sheera" / "Lime Powder") for any
 // casing of it, or null when the category is not a binder.
 export function binderCategory(category: string): string | null {
   const c = category.trim().toLowerCase();
